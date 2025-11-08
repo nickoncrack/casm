@@ -7,7 +7,18 @@ The available registers are:
 + `a, b, c, d`, which are the standard 16-bit registers
 + `r0`, a special register, the use of which will be explained in section `2a`
 + `ip, sp`, instruction pointer and stack pointer respectively, which are inaccessible using the assembly
++ `flags`, contains various flags about the current instruction, can be modified using `setf`
+<br>
 
+As explained below, registers are passed as numbers in the high byte of an operand.
+The following table contains the number corresponding to each register
+| Register | Value |
+| --- | --- |
+| Register A | 0x00 |
+| Register B | 0x01 |
+| Register C | 0x02 |
+| Register D | 0x03 |
+| Register `r0` | 0x04 |
 ### 2. Assembler
 + The assembler parses the code line by line
 + If a symbolic reference is found, i.e. a function (`func`), an operation between symbols and registers (`func+a+6`), the assembler will call `__sym_ref()`
@@ -107,9 +118,40 @@ addr     pre  op   operand 1 operand 2    <sym+i>     instruction
 1. The instruction prefix is a single byte that is placed *before* the opcode and is used to give information to the processor about the operands of the current instruction. (corresponds to the `pre` column)
 + The prefix `0xFF` or `PRE_IMM` is used to tell the processor that an immediate value (i.e. an integer) is passed in the instruction. In 2-operand instructions (like `mov`), the prefix is referring to the second operand, since the first operand can't be anything other than a register. This is currently the *only* available instruction prefix.
 + If the prefix is unset (`0x00`), the processor expects a register in the first/second operand, depending on the instruction.
-2. The opcode, which is the second byte in an instruction, tells the processor which instruction we want to execute. The opcode list can be found in `instructions.h`
-3. The operands occupy the rest of the available bytes in our 6 byte instruction with each operand occupying 2 bytes. Each operand can either contain a register or an immediate value (as explained above). If an operand contains a register, then its *high* (first) byte will contain a number which corresponds to the register. The numbers corresponding to each register can be found in `instructions.h`. If an operand contains an immediate value, the instruction prefix will be set to `0xFF` and the value will be stored in the operand's bytes in big-endian order.
+2. The opcode, which is the second byte in an instruction, tells the processor which instruction we want to execute. The opcode list can be found in section `3a`
+3. The operands occupy the rest of the available bytes in our 6 byte instruction with each operand occupying 2 bytes. Each operand can either contain a register or an immediate value (as explained above). If an operand contains a register, then its *high* (first) byte will contain a number which corresponds to the register. If an operand contains an immediate value, the instruction prefix will be set to `0xFF` and the value will be stored in the operand's bytes in big-endian order.
 <br>
 Now let's talk about the first instruction.
 
 Notice how the instruction at address `0x1000` which is `jmp <main+0>` (or `jmp 0x1030` if you like) doesn't exist in the initial program? This is used to simplify the assembly process. The instruction `entry 0x1000` doesn't *really* set the entry point (beginning of `main`) to `0x1000`, instead, it tells the assembler that the entire program will be placed at that address. Since the code is parsed line by line, it means that if the main function is first, it can't make any symbol references, as almost all other symbols will be defined after the main function. Therefore, once the assembly is completed, the assembler finds the address of the first instruction of `main` and places a jump instruction to that address at the top of the program.
+<br>
+
+### 3. Instructions
+
+#### 3a. Normal instructions
+| Opcode | Mnemonic | Description |
+| --- | --- | --- |
+| 0x00 | NOP | No instruction |
+| 0x01 | SETF | Modifies the `flags` register according to the operation: `flags \|= op1` |
+| 0x02 | ADD | Addition between the 2 operands: `op1 += op2` |
+| 0x03 | MOV | Moves the second operand to the first: `op1 <- op2` |
+| 0x04 | CMP | Compares the first operand with the second and sets the `flags` register accordingly |
+| 0x05 | JZ | Jumps to `op1` if the zero bit is set in `flags` |
+| 0x06 | JNZ | Jumps to `op1` if the zero bit is __not__ set in `flags` |
+| 0x07 | JE | Jumps to `op1` if the equal bit is set |
+| 0x08 | JNE | Jumps to `op1` if the equal bit is __not__ set |
+| 0x09 | JG | Jumps to `op1` if the greater bit is set |
+| 0x0A | JGE | Jumps to `op1` if the greater or the equal bit is set |
+| 0x0B | JL | Jumps to `op1` if none of the comparison bits are set |
+| 0x0C | JLE | Jumps to `op1` if none of the comparison bits are set or if the equal bit is set |
+| 0x0D | PUSH | Pushes `op1` to the stack |
+| 0x0E | POP | Pops the last stack value into `op1`. `op1` __must__ be a register |
+| 0x0F | CALL | Pushes the current `ip` into the stack and jumps to `op1` |
+| 0x10 | RET | Jumps to the last value of the stack |
+| 0x11 | JMP | Jumps to `op1` |
+
+#### 3b. Special instructions
+| Opcode | Mnemonic | Description |
+| --- | --- | --- |
+| 0xFE | DUMP | Debug instruction; dumps the current state of the processor to the terminal |
+| 0xFF | END | Marks the end of the program execution |
