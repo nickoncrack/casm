@@ -149,6 +149,8 @@ Notice how the instruction at address `0x1000` which is `jmp <main+0>` (or `jmp 
 | 0x0F | CALL | Pushes the current `ip` into the stack and jumps to `op1` |
 | 0x10 | RET | Jumps to the last value of the stack |
 | 0x11 | JMP | Jumps to `op1` |
+| 0x12-0x16 | - | Interrupt instructions, not yet documented |
+| 0x17 | SUB | Subtraction between the 2 operands: `op1 -= op2`
 
 #### 3b. Special instructions
 | Opcode | Mnemonic | Description |
