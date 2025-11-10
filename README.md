@@ -150,7 +150,7 @@ Notice how the instruction at address `0x1000` which is `jmp <main+0>` (or `jmp 
 | 0x10 | RET | Jumps to the last value of the stack |
 | 0x11 | JMP | Jumps to `op1` |
 | 0x12 | LIDT | Loads an interrupt descriptor table from a given memory address |
-| 0x13 | INT | Triggers an interrupt, even when interrupts are *disbaled* |
+| 0x13 | INT | Triggers an interrupt, even when interrupts are *disabled* |
 | 0x14 | CLI | Clear interrupt flag; disables the interrupts |
 | 0x15 | STI | Set interrupt flag; enables the interrupts |
 | 0x16 | SUB | Subtraction between the 2 operands: `op1 -= op2` |
@@ -160,3 +160,18 @@ Notice how the instruction at address `0x1000` which is `jmp <main+0>` (or `jmp 
 | --- | --- | --- |
 | 0xFE | DUMP | Debug instruction; dumps the current state of the processor to the terminal |
 | 0xFF | END | Marks the end of the program execution |
+<br>
+
+### 4. Interrupts
+<sub>Note: As of now, interrupts isn't a fully completed feature so it cannot be properly documented yet.</sub>
+
+#### 4a. Interrupt descriptor table
+An interrupt descriptor table can be loaded using the instruction `lidt <addr>`.
+<br>
+
+The structure of the interrupt descriptor table is simple, each entry has 1 element which is the address of the *n*th interrupt handler.
+<br>
+<sub>Note: Modifying the interrupt descriptor table is currently an unavailable feature because of the lack of `movb` and `movs` instructions, which are supposed to manipulate bytes in memory.</sub>
+
+#### 4b. Interrupt handling
+If `int n` is executed and the value of the *n*th entry in the IDT is nonzero then, `ip` will be set to `idt[n]`, after pushing the current `ip` to the stack. However, if `idt[n]` is zero, the interrupt handler will recurse to itself indefinitely, marking an unhandled interrupt. 
