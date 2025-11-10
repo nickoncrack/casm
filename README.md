@@ -149,8 +149,11 @@ Notice how the instruction at address `0x1000` which is `jmp <main+0>` (or `jmp 
 | 0x0F | CALL | Pushes the current `ip` into the stack and jumps to `op1` |
 | 0x10 | RET | Jumps to the last value of the stack |
 | 0x11 | JMP | Jumps to `op1` |
-| 0x12-0x16 | - | Interrupt instructions, not yet documented |
-| 0x17 | SUB | Subtraction between the 2 operands: `op1 -= op2`
+| 0x12 | LIDT | Loads an interrupt descriptor table from a given memory address |
+| 0x13 | INT | Triggers an interrupt, even when interrupts are *disbaled* |
+| 0x14 | CLI | Clear interrupt flag; disables the interrupts |
+| 0x15 | STI | Set interrupt flag; enables the interrupts |
+| 0x16 | SUB | Subtraction between the 2 operands: `op1 -= op2` |
 
 #### 3b. Special instructions
 | Opcode | Mnemonic | Description |
