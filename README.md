@@ -163,6 +163,8 @@ Notice how the instruction at address `0x1000` which is `jmp <main+0>` (or `jmp 
 | 0x14 | CLI | Clear interrupt flag; disables the interrupts |
 | 0x15 | STI | Set interrupt flag; enables the interrupts |
 | 0x16 | SUB | Subtraction between the 2 operands: `op1 -= op2` |
+| 0x17 | MOVB | Moves 1 byte (or an 8 bit integer) to the given memory address: `*op1 = (op2 & 0xFF)` |
+| 0x18 | MOVS | Moves a 16 bit integer to the given memory address |
 
 #### 3b. Special instructions
 | Opcode | Mnemonic | Description |
@@ -180,7 +182,6 @@ An interrupt descriptor table can be loaded using the instruction `lidt <addr>`.
 
 The structure of the interrupt descriptor table is simple, each entry has 1 element which is the address of the *n*th interrupt handler.
 <br>
-<sub>Note: Modifying the interrupt descriptor table is currently an unavailable feature because of the lack of `movb` and `movs` instructions, which are supposed to manipulate bytes in memory.</sub>
 
 #### 4b. Interrupt handling
 If `int n` is executed and the value of the *n*th entry in the IDT is nonzero then, `ip` will be set to `idt[n]`, after pushing the current `ip` to the stack. However, if `idt[n]` is zero, the interrupt handler will recurse to itself indefinitely, marking an unhandled interrupt. 
