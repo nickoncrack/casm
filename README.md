@@ -165,7 +165,7 @@ Notice how the instruction at address `0x1000` which is `jmp <main+0>` (or `jmp 
 | 0x16 | SUB | Subtraction between the 2 operands: `op1 -= op2` |
 | 0x17 | MOVB | Moves 1 byte (or an 8 bit integer) to the given memory address: `*op1 = (op2 & 0xFF)` |
 | 0x18 | MOVS | Moves a 16 bit integer to the given memory address |
-| 0x19 | DIV | Divides register A by `op1`, stores the quotient in register A and the remainder in register D |
+| 0x19 | DIV | Divides register A by `op1`, stores the quotient in register A and the remainder in register D. If `op1` is 0, `INT 0` will be triggered |
 
 #### 3b. Special instructions
 | Opcode | Mnemonic | Description |
