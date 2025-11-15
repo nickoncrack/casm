@@ -175,8 +175,6 @@ Notice how the instruction at address `0x1000` which is `jmp <main+0>` (or `jmp 
 <br>
 
 ### 4. Interrupts
-<sub>Note: As of now, interrupts isn't a fully completed feature so it cannot be properly documented yet.</sub>
-
 #### 4a. Interrupt descriptor table
 An interrupt descriptor table can be loaded using the instruction `lidt <addr>`.
 <br>
