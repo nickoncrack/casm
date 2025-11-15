@@ -194,7 +194,7 @@ test:
 
 main:
     lidt 0xA000
-    movs 0xA000, test ; attach test to INT 0
-    mov a, 10
-    div 0 ; test will be called
+    movs 0xA1FE, test
+    sti
+    int 0xFF ; test will be called
 ```
