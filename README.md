@@ -186,3 +186,17 @@ The structure of the interrupt descriptor table is simple, each entry has 1 elem
 
 #### 4b. Interrupt handling
 If `int n` is executed and the value of the *n*th entry in the IDT is nonzero then, `ip` will be set to `idt[n]`, after pushing the current `ip` to the stack. However, if `idt[n]` is zero, the interrupt handler will recurse to itself indefinitely, marking an unhandled interrupt. 
+<br>
+
+Interrupt handling example:
+```asm
+test:
+    dump
+    end
+
+main:
+    lidt 0xA000
+    movs 0xA000, test ; attach test to INT 0
+    mov a, 10
+    div 0 ; test will be called
+```
