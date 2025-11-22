@@ -52,7 +52,7 @@ jmp r0
 ```
 where `r0` is a special register that is used in this kind of operations. It can be used by the programmer as a general purpose register but this kind of use is non-standard.
 
-Since a register isn't a compile time constant, meaning we can't find it's value during assembly we have to do this *expansion*. On the other hand, `func+6` ___is___ a compile time constant so we can calculate it's value in the assembly process and replace it.
+Since a register isn't a compile time constant, meaning we can't find it's value during assembly we have to do this *expansion*. On the other hand, `func+10` ___is___ a compile time constant so we can calculate it's value in the assembly process and replace it.
 
 
 #### 2b. Stages of the assembly
@@ -128,7 +128,7 @@ addr     op    operand 1   operand 2      <sym+i>     instruction
 + The prefix `0xFF` or `PRE_IMM` is used to tell the processor that an immediate value (i.e. an integer) is passed in the instruction. In 2-operand instructions (like `mov`), the prefix is referring to the second operand, since the first operand can't be anything other than a register. This is currently the *only* available instruction prefix.
 + If the prefix is unset (`0x00`), the processor expects a register in the first/second operand, depending on the instruction.
 2. The opcode, which is the second byte in an instruction, tells the processor which instruction we want to execute. The opcode list can be found in section `3a`
-3. The operands occupy the rest of the available bytes in our 6 byte instruction with each operand occupying 2 bytes. Each operand can either contain a register or an immediate value (as explained above). If an operand contains a register, then its *high* (first) byte will contain a number which corresponds to the register. If an operand contains an immediate value, the instruction prefix will be set to `0xFF` and the value will be stored in the operand's bytes in big-endian order.
+3. The operands occupy the rest of the available bytes in our 10 byte instruction with each operand occupying 2 bytes. Each operand can either contain a register or an immediate value (as explained above). If an operand contains a register, then its *high* (first) byte will contain a number which corresponds to the register. If an operand contains an immediate value, the instruction prefix will be set to `0xFF` and the value will be stored in the operand's bytes in big-endian order.
 <br>
 Now let's talk about the first instruction.
 
