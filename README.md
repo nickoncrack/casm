@@ -122,7 +122,7 @@ addr     op    operand 1   operand 2      <sym+i>     instruction
 0x106E | FF 02 04 00 00 00 00 00 10 02    <main+3>    add r0, <loop+0>
 0x1078 | 00 11 04 00 00 00 00 00 00 00    <main+4>    jmp r0
 ```
-<sub>Note: Here `<sym+i>` represents the *i*th instruction, unlike symbolic addition (`func+6`) which respresents bytes.</sub>
+<sub>Note: Here `<sym+i>` represents the *i*th instruction, unlike symbolic addition (`func+10`) which respresents bytes.</sub>
 
 1. The instruction prefix is a single byte that is placed *before* the opcode and is used to give information to the processor about the operands of the current instruction. (corresponds to the first byte of the `op` column)
 + The prefix `0xFF` or `PRE_IMM` is used to tell the processor that an immediate value (i.e. an integer) is passed in the instruction. In 2-operand instructions (like `mov`), the prefix is referring to the second operand, since the first operand can't be anything other than a register. This is currently the *only* available instruction prefix.
