@@ -8,6 +8,7 @@ The available registers are:
 + `r0`, a special register, the use of which will be explained in section `2a`
 + `ip, sp`, instruction pointer and stack pointer respectively, which are inaccessible using the assembly
 + `flags`, contains various flags about the current instruction, can be modified using `setf` or other instructions.
++ `pta`, page table address, contains the physical address of the page table. (section 5a)
 
 As explained below, registers are passed as numbers in the high byte of an operand.
 The following table contains the number corresponding to each register
@@ -184,7 +185,7 @@ The structure of the interrupt descriptor table is simple, each entry has 1 elem
 <br>
 
 #### 4b. Interrupt handling
-If `int n` is executed and the value of the *n*th entry in the IDT is nonzero then, `ip` will be set to `idt[n]`, after pushing the current `ip` to the stack. However, if `idt[n]` is zero, the interrupt handler will recurse to itself indefinitely, marking an unhandled interrupt. 
+If `int n` is executed and the value of the *n*th entry in the IDT is nonzero then, `ip` will be set to `idt[n]`, after pushing the current `ip` to the stack. However, if `idt[n]` is zero, the interrupt handler will recurse to itself indefinitely, marking an unhandled interrupt. Exectuting `int 0x12` will call a BIOS function. 
 <br>
 
 Interrupt handling example:
@@ -199,3 +200,15 @@ main:
     sti
     int 0xFF ; test will be called
 ```
+<br>
+
+### 5. Memory
+#### 5a. Paging
+Paging is architecturally enabled at reset with an identity mapping of the first 16 MB. The initial page table is modifiable and replacable by the BIOS and the kernel, it is not a permanent structure and therefore should be discarded by the kernel. A permanent and expanded PT must be installed by the kernel using the standard mappings (not yet implemented). Page with index `0` (`VA = 0x00000000`) should not be mapped as it can be used for null pointer exceptions, and the pagse of the region where the BIOS code and the PT (bootstrap PT) live would be unpageable, meaning they are inacessible by privilege levels lower than the kernel and they can never be evicted.
+
+#### 5b. Memory structure
+| VA | Purpose |
+| --- | --- |
+| `0x00000000` | Unmapped page |
+| `4kB-16MB` | BIOS and PT region (unpageable) |
+| `0xFC000000-end ` | Framebuffer |
