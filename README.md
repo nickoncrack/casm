@@ -21,13 +21,21 @@ The following table contains the number corresponding to each register
 | 0x04 | Register `r0` |
 
 #### 1a. The `flags` register
-| Flag | Mnemonic | Description |
+```
+ 15          7      4                   0
++----------+------+----+----+----+----+----+
+| Reserved | IOPL | IF | GF | EF | ZF | IM |
++----------+------+----+----+----+----+----+
+```
+
+| Flag | Length | Description |
 | --- | --- | --- |
-| 0x01 | IMM | Immediate value flag, determines whether an operand will contain an immediate value. This bit is set if the instruction has the `0xFF` prefix |
-| 0x02 | ZF | Zero flag, set by `cmp` when the register in the first operand is equal to 0. |
-| 0x04 | EF | Equal flag, set by `cmp` when `op1 = op2`
-| 0x08 | GF | Greater flag, set by `cmp` when `op1 > op2`
-| 0x10 | IF | Interrupt flag; if set, interrupts are enabled. Can be toggled using `cli` and `sti` |
+| IM | 1 | ~~Immediate value flag, determines whether an operand will contain an immediate value. This bit is set if the instruction has the `0xFF` prefix~~ (unused) |
+| ZF | 1 |  Zero flag, set by `cmp` when the register in the first operand is equal to 0. |
+| EF | 1 | Equal flag, set by `cmp` when `op1 = op2` |
+| GF | 1 | Greater flag, set by `cmp` when `op1 > op2` |
+| IF | 1 | Interrupt flag; if set, interrupts are enabled. Can be toggled using `cli` and `sti` |
+| IOPL | 3 | Current I/O privilege level, readonly for `iopl > 0x00` |
 
 ### 2. Assembler
 + The assembler parses the code line by line
@@ -142,7 +150,7 @@ Notice how the instruction at address `0x1000` which is `jmp <main+0>` (or `jmp 
 | Opcode | Mnemonic | Description |
 | --- | --- | --- |
 | 0x00 | NOP | No instruction |
-| 0x01 | SETF | Modifies the `flags` register according to the operation: `flags \|= op1` |
+| 0x01 | SETF | ~~Modifies the `flags` register according to the operation: `flags \|= op1`~~ (unused) |
 | 0x02 | ADD | Addition between the 2 operands: `op1 += op2` |
 | 0x03 | MOV | Moves the second operand to the first: `op1 <- op2` |
 | 0x04 | CMP | Compares the first operand with the second and sets the `flags` register accordingly |
