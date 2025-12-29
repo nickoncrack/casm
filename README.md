@@ -4,14 +4,15 @@ A cpu emulator that works on a homemade instruction set
 ## How it works
 ### 1. Registers
 The available registers are:
-+ `a, b, c, d`, which are the standard 32-bit registers
++ `a, b, c, d`, which are the standard 32-bit registers and are all modifiable using the `mov` instructions
 + `r0`, a special register, the use of which will be explained in section `2a`
-+ `ip, sp`, instruction pointer and stack pointer respectively, which are inaccessible using the assembly
-+ `flags`, contains various flags about the current instruction, can be modified using `setf` or other instructions.
++ `ip`, the instruction pointer which is indirectly modifiable using `jmp` instructions.
++ `sp`, the stack pointer which is modifiable using the `mov` instructions
++ `flags`, contains various flags about the current instruction, can be modified using `setf` or other instructions (only at `iopl == 0x00`)
 + `pta`, page table address, contains the physical address of the page table. (section 5a)
 
 As explained below, registers are passed as numbers in the high byte of an operand.
-The following table contains the number corresponding to each register
+The following table contains the number corresponding to each register that is modifiable by the `mov` instructions
 | Value | Register |
 | --- | --- |
 | 0x00 | Register A |
@@ -19,6 +20,8 @@ The following table contains the number corresponding to each register
 | 0x02 | Register C |
 | 0x03 | Register D |
 | 0x04 | Register `r0` |
+| 0x05 | Stack pointer (`sp`) |
+| 0x06 | Register `pta` |
 
 #### 1a. The `flags` register
 ```
@@ -145,12 +148,11 @@ Notice how the instruction at address `0x1000` which is `jmp <main+0>` (or `jmp 
 <br>
 
 ### 3. Instructions
-
 #### 3a. Normal instructions
 | Opcode | Mnemonic | Description |
 | --- | --- | --- |
 | 0x00 | NOP | No instruction |
-| 0x01 | SETF | ~~Modifies the `flags` register according to the operation: `flags \|= op1`~~ (unused) |
+| 0x01 | SETF | Modifies the `flags` register according to the operation: `flags \|= op1` (only usable for `iopl == 0x00`) |
 | 0x02 | ADD | Addition between the 2 operands: `op1 += op2` |
 | 0x03 | MOV | Moves the second operand to the first: `op1 <- op2` |
 | 0x04 | CMP | Compares the first operand with the second and sets the `flags` register accordingly |
@@ -213,10 +215,30 @@ main:
 ### 5. Memory
 #### 5a. Paging
 Paging is architecturally enabled at reset with an identity mapping of the first 16 MB. The initial page table is modifiable and replacable by the BIOS and the kernel, it is not a permanent structure and therefore should be discarded by the kernel. A permanent and expanded PT must be installed by the kernel using the standard mappings (not yet implemented). Page with index `0` (`VA = 0x00000000`) should not be mapped as it can be used for null pointer exceptions, and the pagse of the region where the BIOS code and the PT (bootstrap PT) live would be unpageable, meaning they are inacessible by privilege levels lower than the kernel and they can never be evicted.
+<br>
 
-#### 5b. Memory structure
-| VA | Purpose |
-| --- | --- |
-| `0x00000000` | Unmapped page |
-| `4kB-16MB` | BIOS and PT region (unpageable) |
-| `0xFC000000-end ` | Framebuffer |
+The following page strucutre is used
+```c
+struct page {
+  uint32_t physical_addr;
+  uint8_t present : 1;
+  uint8_t rw : 1;
+  uint8_t kernel : 1;
+  uint8_t evictable : 1;
+  uint8_t reserved : 4;
+};
+```
+
+#### 5b. Initial memory structure
+This memory structure is temporary and is set up by the CPU after reset. It is standard practice that the kernel copies these mappings into the expanded page table and leave them as is.
+<br>
+| Start VA | Page index | Size | Purpose |
+| --- | --- | --- | --- |
+| `0x00000000` | 0 | 4 KiB | Unmapped page for detecting null pointer dereferences |
+| `0x00001000` | 1-128 | 512 KiB | BIOS region |
+| `0x00081000` | 129-134 | 20 KiB | Initial page table |
+| `0x00087000` | 135-2048 | ~7.47 MiB | Kernel binary |
+| `0x00801000` | 2049-3969 | 7.5 MiB | Reserved kernel memory |
+| `0x00F82000` | 3970-3972 | 8 KiB | Text video buffer |
+| `0x00F85000` | 3973-3999 | 104 KiB | Reserved |
+| `0x00FA0000` | 4000-4096 | 384 KiB | Stack |
