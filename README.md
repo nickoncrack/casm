@@ -232,7 +232,7 @@ struct page {
 #### 5b. Initial memory structure
 This memory structure is temporary and is set up by the CPU after reset. It is standard practice that the kernel copies these mappings into the expanded page table and leave them as is.
 <br>
-| Start VA | Page index | Size | Purpose |
+| Start VA | Page index | Size | Description |
 | --- | --- | --- | --- |
 | `0x00000000` | 0 | 4 KiB | Unmapped page for detecting null pointer dereferences |
 | `0x00001000` | 1-128 | 512 KiB | BIOS region |
@@ -242,3 +242,17 @@ This memory structure is temporary and is set up by the CPU after reset. It is s
 | `0x00F82000` | 3970-3972 | 8 KiB | Text video buffer |
 | `0x00F85000` | 3973-3999 | 104 KiB | Reserved |
 | `0x00FA0000` | 4000-4096 | 384 KiB | Stack |
+
+### 6. I/O Ports
+The processor communicates with external hardware devices using the `in` and `out` instructions (i.e. `inb`, `outb`)
+
+| Port | Device | Description |
+| --- | --- | --- |
+| `0x00` | System timer | Provides high resolution timing and interrupt generation |
+
+#### 6a. System timer commands
+- **0x0000 (READ_CLK):** Returns the current 32-bit cycle counter.
+- **0x0001 (TOGGLE):** Enables/Disables the counter.
+- **0x0002 (INT_CNT):** Returns the number of timer interrupts triggered since reset.
+- **0x0003 (SET_THRESH):** Sets the cycle threshold for the next `INT 0x00`.
+- **0x0004 (RESET_INT_CNT):** Resets the number of interrupts triggered.
