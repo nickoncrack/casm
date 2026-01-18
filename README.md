@@ -212,9 +212,21 @@ main:
 ```
 <br>
 
+#### 4c. Interrupts/Exceptions
+| `INT n` | Type | Description | 
+| --- | --- | --- |
+| 0x00 | E | Division by zero |
+| 0x01 | E | Invalid opcode |
+| 0x02 | E | Invalid device |
+| 0x03 | E | Out of bounds exception |
+| 0x04 | E | Privilege exception |
+| 0x05 | E | Page fault |
+| 0x20 | I | Timer interrupt |
+<br>
+
 ### 5. Memory
 #### 5a. Paging
-Paging is architecturally enabled at reset with an identity mapping of the first 16 MB. The initial page table is modifiable and replacable by the BIOS and the kernel, it is not a permanent structure and therefore should be discarded by the kernel. A permanent and expanded PT must be installed by the kernel using the standard mappings (not yet implemented). Page with index `0` (`VA = 0x00000000`) should not be mapped as it can be used for null pointer exceptions, and the pagse of the region where the BIOS code and the PT (bootstrap PT) live would be unpageable, meaning they are inacessible by privilege levels lower than the kernel and they can never be evicted.
+Paging is architecturally enabled at reset with an identity mapping of the first 16 MB. The initial page table is modifiable and replacable by the BIOS and the kernel, it is not a permanent structure and therefore should be discarded by the kernel. A permanent and expanded PT must be installed by the kernel using the standard mappings (not yet implemented). Page with index `0` (`VA = 0x00000000`) should not be mapped as it can be used for null pointer exceptions, and the pages of the region where the BIOS code and the PT (bootstrap PT) live would be unpageable, meaning they are inacessible by privilege levels lower than the kernel and they can never be evicted.
 <br>
 
 The following page strucutre is used
@@ -242,6 +254,7 @@ This memory structure is temporary and is set up by the CPU after reset. It is s
 | `0x00F82000` | 3970-3972 | 8 KiB | Text video buffer |
 | `0x00F85000` | 3973-3999 | 104 KiB | Reserved |
 | `0x00FA0000` | 4000-4096 | 384 KiB | Stack |
+<br>
 
 ### 6. I/O Ports
 The processor communicates with external hardware devices using the `in` and `out` instructions (i.e. `inb`, `outb`)
