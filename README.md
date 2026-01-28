@@ -49,6 +49,7 @@ The following table contains the number corresponding to each register that is m
 Directives are pseudo-instructions that are executed by the assembler during compile time. The following directives are currently implemented:
 
 + `entry <addr>`: Sets the program entry point, defaulting to `0x00010000`. Can be only placed on the first line of the program.
++ `section <.data/.func>`: Used to define a program section. `.data` section contains preallocated variables and `.func` contains the code of the program
 + `<symbol> def <addr>`: Assignes the given address to the given symbol in the symbol table (i.e. `sym_table[symbol] = addr`).
 + `d[x] <value>`: Allocates a number of bytes, depending on `x` (`db`, `dw`, etc.), and assignes a value to them, cannot be used in the `.func` section. 
 
