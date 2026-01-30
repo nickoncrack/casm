@@ -56,8 +56,9 @@ Directives are pseudo-instructions that are executed by the assembler during com
 #### 2b. Predefined symbols
 | Symbol | Description |
 | --- | --- |
-| `$` | Indicates the start of the `.data` section if present, if not, indicates the start of `.func` |
-| `$$` | Address index pointer, i.e. points to the current instruction or index in `.data` |
+| `$` | Address index pointer, i.e. points to the current instruction or index in `.data` |
+| `$.data` | Points to the start of `.data` (used internally) |
+| `$.func` | Points to the start of `.func` |
 
 Usage:
 ```asm
