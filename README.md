@@ -65,7 +65,7 @@ Usage:
 section .data
   dd 0x00
   dw 0x00
-  test def $$ - 0x06 ; size is ambiguous
+  test def $ - 0x06 ; size is ambiguous
 
 section .func
 main:
