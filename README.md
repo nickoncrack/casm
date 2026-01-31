@@ -189,7 +189,8 @@ The prefix itself, consists of 3 sections:
 **ii.** Operands
 + `0b00`: register
 + `0b01`: integer
-+ `0b10`: pointer dereference
++ `0b10`: pointer dereference of a register
++ `0b11`: pointer dereference of fixed address
 <br>
 
 2. The opcode, which is the second byte in an instruction, tells the processor which instruction we want to execute. The opcode list can be found in section `3a`
