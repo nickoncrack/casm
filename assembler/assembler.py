@@ -127,9 +127,11 @@ def __val_2op(ins: str, operands: List[str]) -> Union[instruction, Literal[-1, -
                 else:
                     return INVALID_COMB
 
-    # operand size is unspecified
+    # special cases
     if ret[0] & (PRE_PTR << 2) and ins == "mov":
-        return INVALID_COMB
+        return INVALID_COMB # operand size is unspecified
+    if ~ret[0] & (PRE_PTR << 2) and ret[0] & (PRE_INT << 2) and ins.startswith("mov"):
+        return INVALID_COMB # mov[x] instructions cannot have an immediate integer as the first operand
          
     return ret
     
@@ -220,11 +222,13 @@ def __sym_ref(op: str) -> Union[str, instruction]:
     for i in range(len(split)):
         if split[i][0] == '\'' and split[i][2] == '\'':
             split[i] = str(ord(split[i][1]))
-        elif split[i][0] == '-':
-            if split[i][1] == '0' and split[i][2] == 'x':
+        
+        if len(split[i]) > 2:
+            if split[i][0] == '-':
+                if split[i][1] == '0' and split[i][2] == 'x':
+                    split[i] = str(int(split[i], 16))
+            elif split[i][0] == '0' and split[i][1] == 'x':
                 split[i] = str(int(split[i], 16))
-        elif split[i][0] == '0' and split[i][1] == 'x':
-            split[i] = str(int(split[i], 16))
 
     ret = list()
 
@@ -315,12 +319,6 @@ def __sym_ref(op: str) -> Union[str, instruction]:
                         print(f"{split[i][1:]} is not defined at line {crt_line}")
                         sys.exit(0)
                 else:
-                    # if split[i][0] == '[' and split[i][-1] == ']':
-                    #     ptr = True
-                    #     t = split[i][1:-1]
-                    # else:
-                    #     t = split[i]
-
                     t = split[i]
 
                     if t in sym_table:
@@ -338,7 +336,8 @@ def __sym_ref(op: str) -> Union[str, instruction]:
     
 
 def parse_instruction(ins: str) -> Union[instruction, Literal[0, -1, -2], List[instruction]]:
-    s = ins.split(maxsplit=1) # split between instruction and operands
+    s0 = ins.split(sep="//") # remove comments
+    s = s0[0].split(maxsplit=1) # split between instruction and operands
     if len(s) == 0:
         return 0 # no instruction
     
@@ -426,7 +425,6 @@ def parse_instruction(ins: str) -> Union[instruction, Literal[0, -1, -2], List[i
             else:
                 split[1] = ref # type: ignore
                 return __val_2op(opcode, split) # type: ignore
-
         except IndexError:
             return INVALID_COMB
     elif len(instructions[opcode]["operands"]) == 1:
@@ -487,7 +485,8 @@ def parse_program(file: str) -> Union[List[instruction], Literal[0]]:
     n = 0 # nth instruction
 
     for i in range(len(lines)):
-        if lines[i] == "":
+        # empty lines or comments
+        if lines[i] == "" or lines[i][0] == '/' and lines[i][1] == '/':
             crt_line += 1
             continue
     
@@ -495,24 +494,24 @@ def parse_program(file: str) -> Union[List[instruction], Literal[0]]:
             if re.match("^[a-zA-Z_]{1}[a-zA-Z0-9_]+$", lines[i][:-1]): # match letters only
                 if lines[i][:-1] in sym_table:
                     print(f"Duplicate definition of symbol `{lines[i][:-1]}` in {file}:{crt_line}")
-                    return 0
+                    sys.exit(0)
 
                 if "$.func" not in sym_table:
                     print("Cannot define a function outside of .func")
-                    return 0
+                    sys.exit(0)
 
                 sym_table[lines[i][:-1]] = sym_table["$.func"] + n * INSTRUCTION_SIZE
             else:
                 print(f"Syntax error in {file}:{crt_line}: Invalid function name `{lines[i][:-1]}`")
-                return 0
+                sys.exit(0)
         else:
             ins = parse_instruction(lines[i])
             if ins == INVALID_OPCODE:
                 print(f"Invalid opcode in {file}:{crt_line}")
-                return 0
+                sys.exit(0)
             elif ins == INVALID_COMB:
                 print(f"Invalid combination of opcode and operands in {file}:{crt_line}")
-                return 0
+                sys.exit(0)
             elif ins == 0:
                 crt_line += 1
                 continue
@@ -536,7 +535,6 @@ if __name__ == "__main__":
     start = time.time()
 
     p = parse_program("assembler/test")
-
     p.insert(0, data_section) # type: ignore
 
     if "main" not in sym_table:
