@@ -305,7 +305,8 @@ This memory structure is temporary and is set up by the CPU after reset. It is s
 | `0x00087000` | 135-2048 | ~7.47 MiB | Kernel binary |
 | `0x00801000` | 2049-3969 | 7.5 MiB | Reserved kernel memory |
 | `0x00F82000` | 3970-3972 | 8 KiB | Text video buffer |
-| `0x00F85000` | 3973-3999 | 104 KiB | Reserved |
+| `0x00F85000` | 3973 | 4 KiB | Interrupt descriptor table |
+| `0x00F86000` | 3974-3999 | 100 KiB | Reserved |
 | `0x00FA0000` | 4000-4096 | 384 KiB | Stack |
 <br>
 
