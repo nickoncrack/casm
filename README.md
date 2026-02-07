@@ -49,16 +49,16 @@ The following table contains the number corresponding to each register that is m
 Directives are pseudo-instructions that are executed by the assembler during compile time. The following directives are currently implemented:
 
 + `entry <addr>`: Sets the program entry point, defaulting to `0x00010000`. Can be only placed on the first line of the program.
-+ `section <.data/.func>`: Used to define a program section. `.data` section contains preallocated variables and `.func` contains the code of the program
++ `section <.data/.code>`: Used to define a program section. `.data` section contains preallocated variables and `.code` contains the code of the program
 + `<symbol> def <addr>`: Assignes the given address to the given symbol in the symbol table (i.e. `sym_table[symbol] = addr`).
-+ `d[x] <value>`: Allocates a number of bytes, depending on `x` (`db`, `dw`, etc.), and assignes a value to them, cannot be used in the `.func` section. 
++ `d[x] <value>`: Allocates a number of bytes, depending on `x` (`db`, `dw`, etc.), and assignes a value to them, cannot be used in the `.code` section. 
 
 #### 2b. Predefined symbols
 | Symbol | Description |
 | --- | --- |
 | `$` | Address index pointer, i.e. points to the current instruction or index in `.data` |
 | `$.data` | Points to the start of `.data` (used internally) |
-| `$.func` | Points to the start of `.func` |
+| `$.code` | Points to the start of `.code` |
 
 Usage:
 ```asm
@@ -67,7 +67,7 @@ section .data
   dw 0x00
   test def $ - 0x06 ; size is ambiguous
 
-section .func
+section .code
 main:
   movd a, [test] ; mov[x] instructions fix the ambiguity
 ```
@@ -228,9 +228,10 @@ Notice how the instruction at address `0x1000` which is `jmp <main+0>` (or `jmp 
 | 0x15 | STI | Set interrupt flag; enables the interrupts |
 | 0x16 | SUB | Subtraction between the 2 operands: `op1 -= op2` |
 | 0x17 | MOVB | Moves 1 byte (or an 8 bit integer) into the given memory address: `*op1 = (op2 & 0xFF)` |
-| 0x18 | MOVS | Moves a 16 bit integer into the given memory address |
+| 0x18 | MOVW | Moves a 16 bit integer into the given memory address |
 | 0x19 | MOVD | Moves a 32 bit integer into the given memory address |
 | 0x1A | DIV | Divides register A by `op1`, stores the quotient in register A and the remainder in register D. If `op1` is 0, `INT 0` will be triggered |
+| 0x20 | MUL | Multiplies `op1` by `op2` |
 
 #### 3b. Special instructions
 | Opcode | Mnemonic | Description |
@@ -259,7 +260,7 @@ test:
 
 main:
     lidt 0xA000
-    movs 0xA1FE, test
+    movd 0xA1FE, test
     sti
     int 0xFF ; test will be called
 ```
@@ -275,6 +276,7 @@ main:
 | 0x04 | E | Privilege exception |
 | 0x05 | E | Page fault |
 | 0x20 | I | Timer interrupt |
+| 0x80 | I | BIOS interrupt |
 <br>
 
 ### 5. Memory
