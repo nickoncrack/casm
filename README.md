@@ -233,6 +233,8 @@ Notice how the instruction at address `0x1000` which is `jmp <main+0>` (or `jmp 
 | 0x1A | DIV | Divides register A by `op1`, stores the quotient in register A and the remainder in register D. If `op1` is 0, `INT 0` will be triggered |
 | 0x20 | MUL | Multiplies `op1` by `op2` |
 | 0x21 | IRET | Interrupt return; used when the invoked interrupt finishes execution. Pops `flags` and `ip` |
+| 0x22 | PUSHA | Pushes all general purpose registers in the following order: `a, b, c, d` | 
+| 0x23 | POPA | Pops the first 16 bytes of the stack into the general purpose registers in the following order: `d, c, b, a` |
 
 #### 3b. Special instructions
 | Opcode | Mnemonic | Description |
