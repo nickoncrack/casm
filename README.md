@@ -249,18 +249,18 @@ The structure of the interrupt descriptor table is simple, each entry has 1 elem
 <br>
 
 #### 4b. Interrupt handling
-If `int n` is executed and the value of the *n*th entry in the IDT is nonzero then, `ip` will be set to `idt[n]`, after pushing the current `ip` to the stack. However, if `idt[n]` is zero, the interrupt handler will recurse to itself indefinitely, marking an unhandled interrupt. Exectuting `int 0x12` will call a BIOS function. 
+If `int n` is executed and the value of the *n*th entry in the IDT is nonzero then, `ip` will be set to `idt[n]`, after pushing the current `ip` to the stack. However, if `idt[n]` is zero, the interrupt handler will recurse to itself indefinitely, marking an unhandled interrupt. Exectuting `int 0x80` will call a BIOS function. 
 <br>
 
 Interrupt handling example:
 ```asm
 test:
     dump
-    end
+    iret
 
 main:
-    lidt 0xA000
-    movd 0xA1FE, test
+    lidt 0x00F85000
+    movd [0x00F853FC], test
     sti
     int 0xFF ; test will be called
 ```
