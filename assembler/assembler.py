@@ -18,7 +18,7 @@ MAX_w = 2 ** 16 - 1
 MAX_d = 2 ** 32 - 1
 
 ## sections
-SECT_FUNC = "$.func"
+SECT_CODE = "$.code"
 SECT_DATA = "$.data"
 
 ## prefixes
@@ -100,7 +100,7 @@ def __val_2op(ins: str, operands: List[str]) -> Union[instruction, Literal[-1, -
                 operands[i] = operands[i][1:-1]
             else:
                 ret[0] |= PRE_INT << rshift
-            
+
             # if op1 is not an integer, it could be a register (only valid for PRE_PTR)
             try:
                 op = __parse_int(operands[i])
@@ -220,6 +220,8 @@ def __sym_ref(op: str) -> Union[str, instruction]:
 
     # convert characters to their ascii value
     for i in range(len(split)):
+        split[i] = split[i].strip()
+
         if split[i][0] == '\'' and split[i][2] == '\'':
             split[i] = str(ord(split[i][1]))
         
@@ -285,7 +287,7 @@ def __sym_ref(op: str) -> Union[str, instruction]:
         s = sum([((__parse_int(x) if x[1:] not in sym_table else -sym_table[x[1:]]) if x not in sym_table else sym_table[x]) for x in split])
 
         # if ptr:
-        #     if "$.data" in sym_table and s < sym_table["$.func"] and (s + sym_table["$.data"]) > sym_table["$.func"]:
+        #     if "$.data" in sym_table and s < sym_table["$.code"] and (s + sym_table["$.data"]) > sym_table["$.code"]:
         #         warning("")
 
         sh = (s >> 16) & 0xFFFF
@@ -340,11 +342,11 @@ def parse_instruction(ins: str) -> Union[instruction, Literal[0, -1, -2], List[i
     s = s0[0].split(maxsplit=1) # split between instruction and operands
     if len(s) == 0:
         return 0 # no instruction
-    
+
     opcode = s[0]
 
     ret: instruction = [0, 0, 0, 0, 0, 0, 0, 0, 0 ,0]
-    
+
     # parse directives or return INVALID_OPCODE
     if opcode not in instructions:
         if s[1].startswith(D_DEF):
@@ -363,14 +365,14 @@ def parse_instruction(ins: str) -> Union[instruction, Literal[0, -1, -2], List[i
             return 0 # directive executed
         elif s[0] == D_SECT:
             if s[1] == ".data":
-                if SECT_FUNC in sym_table: # .data must be placed first
+                if SECT_CODE in sym_table: # .data must be placed first
                     return INVALID_COMB
-                
+
                 # if .data is present it has a fixed address:
                 # &(.data) = org + jmp <main> (10)
                 sym_table[SECT_DATA] = entry_point + 0x0A
-            elif s[1] == ".func":
-                sym_table[SECT_FUNC] = sym_table["$"]
+            elif s[1] == ".code":
+                sym_table[SECT_CODE] = sym_table["$"]
             else:
                 print(f"Invalid section definition at line {crt_line}")
                 sys.exit(0)
@@ -381,7 +383,7 @@ def parse_instruction(ins: str) -> Union[instruction, Literal[0, -1, -2], List[i
                 return INVALID_OPCODE
             
             # d[x] instructions are exclusive to .data
-            if SECT_DATA in sym_table and SECT_FUNC in sym_table:
+            if SECT_DATA in sym_table and SECT_CODE in sym_table:
                 return INVALID_OPCODE
 
             # db "string"
@@ -479,7 +481,7 @@ def parse_program(file: str) -> Union[List[instruction], Literal[0]]:
     else:
         print(f"No entry directive found. Defaulting to {entry_point}.")
 
-    sym_table["$"] = entry_point + 0x0A # current byte pointer
+    sym_table["$"] = entry_point + 0x0A + 0x04 # current byte pointer
 
     # text section parsing
     n = 0 # nth instruction
@@ -496,11 +498,11 @@ def parse_program(file: str) -> Union[List[instruction], Literal[0]]:
                     print(f"Duplicate definition of symbol `{lines[i][:-1]}` in {file}:{crt_line}")
                     sys.exit(0)
 
-                if "$.func" not in sym_table:
-                    print("Cannot define a function outside of .func")
+                if SECT_CODE not in sym_table:
+                    print("Cannot define a function outside of .code")
                     sys.exit(0)
 
-                sym_table[lines[i][:-1]] = sym_table["$.func"] + n * INSTRUCTION_SIZE
+                sym_table[lines[i][:-1]] = sym_table[SECT_CODE] + n * INSTRUCTION_SIZE
             else:
                 print(f"Syntax error in {file}:{crt_line}: Invalid function name `{lines[i][:-1]}`")
                 sys.exit(0)
@@ -531,11 +533,34 @@ def parse_program(file: str) -> Union[List[instruction], Literal[0]]:
     return ret
 
 
+bios_functions = ("BIOS_print", "BIOS_sprint")
 if __name__ == "__main__":
+    # if bios = True then the assembler will search for bios functions in the binary and save their addresses into a jump table
+    # which will be placed at the beginning of the .data section
+    bios = True
+
     start = time.time()
 
-    p = parse_program("assembler/test")
+    if bios:
+        p = parse_program("assembler/bios")
+    else:
+        p = parse_program("assembler/test")
+
+    if bios:
+        for i in sym_table:
+            if i in bios_functions:
+                idx = bios_functions.index(i)
+                try:
+                    data_section[4 * idx + 0] = (sym_table[i] >> 0x18) & 0xFF
+                    data_section[4 * idx + 1] = (sym_table[i] >> 0x10) & 0xFF
+                    data_section[4 * idx + 2] = (sym_table[i] >> 0x08) & 0xFF
+                    data_section[4 * idx + 3] = (sym_table[i] >> 0x00) & 0xFF
+                except IndexError:
+                    print("Not enough bytes allocated for the bios jump table.")
+                    sys.exit(0)
+
     p.insert(0, data_section) # type: ignore
+    p.insert(0, int(sym_table[SECT_CODE]).to_bytes(4, "big")) # type: ignore
 
     if "main" not in sym_table:
         print(f"No main function defined")
@@ -558,14 +583,17 @@ if __name__ == "__main__":
     delta = time.time() - start
     print(f"Assembly completed in {round(delta * 1000, 4)}ms")
 
-    for i in sym_table:
-        print(f"{i}: {hex(sym_table[i])}")
+    # for i in sym_table:
+    #     print(f"{i}: {hex(sym_table[i])}")
 
-    f = open("assembler/out.bin", "wb")
+    if bios:
+        f = open("assembler/bios.bin", "wb")
+    else:
+        f = open("assembler/out.bin", "wb")
 
     # align to instruction size
     # data_section.extend(bytearray((0x00,) * (INSTRUCTION_SIZE - len(data_section) % INSTRUCTION_SIZE))) # type: ignore
 
     for i in range(len(p)): # type: ignore
-        print(f"{hex(entry_point + i * INSTRUCTION_SIZE)}: {list(map(lambda l: hex(l)[2:].zfill(2), p[i]))}") # type: ignore
+        # print(f"{hex(entry_point + i * INSTRUCTION_SIZE)}: {list(map(lambda l: hex(l)[2:].zfill(2), p[i]))}") # type: ignore
         f.write(bytearray(p[i])) # type: ignore
