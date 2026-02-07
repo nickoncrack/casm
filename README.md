@@ -323,5 +323,5 @@ The processor communicates with external hardware devices using the `in` and `ou
 - **0x0000 (READ_CLK):** Returns the current 32-bit cycle counter.
 - **0x0001 (TOGGLE):** Enables/Disables the counter.
 - **0x0002 (INT_CNT):** Returns the number of timer interrupts triggered since reset.
-- **0x0003 (SET_THRESH):** Sets the cycle threshold for the next `INT 0x00`.
+- **0x0003 (SET_THRESH):** Sets the cycle threshold for the next `INT 0x20`.
 - **0x0004 (RESET_INT_CNT):** Resets the number of interrupts triggered.
