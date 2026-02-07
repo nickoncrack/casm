@@ -218,9 +218,9 @@ Notice how the instruction at address `0x1000` which is `jmp <main+0>` (or `jmp 
 | 0x0B | JL | Jumps to `op1` if none of the comparison bits are set |
 | 0x0C | JLE | Jumps to `op1` if none of the comparison bits are set or if the equal bit is set |
 | 0x0D | PUSH | Pushes `op1` to the stack |
-| 0x0E | POP | Pops the last stack value into `op1`. `op1` __must__ be a register |
+| 0x0E | POP | Pops the last stack value into `op1`. `op1` cannot be an immediate integer |
 | 0x0F | CALL | Pushes the current `ip` into the stack and jumps to `op1` |
-| 0x10 | RET | Jumps to the last value of the stack |
+| 0x10 | RET | Pops `ip` |
 | 0x11 | JMP | Jumps to `op1` |
 | 0x12 | LIDT | Loads an interrupt descriptor table from a given memory address |
 | 0x13 | INT | Triggers an interrupt, even when interrupts are *disabled* |
@@ -232,6 +232,7 @@ Notice how the instruction at address `0x1000` which is `jmp <main+0>` (or `jmp 
 | 0x19 | MOVD | Moves a 32 bit integer into the given memory address |
 | 0x1A | DIV | Divides register A by `op1`, stores the quotient in register A and the remainder in register D. If `op1` is 0, `INT 0` will be triggered |
 | 0x20 | MUL | Multiplies `op1` by `op2` |
+| 0x21 | IRET | Interrupt return; used when the invoked interrupt finishes execution. Pops `flags` and `ip` |
 
 #### 3b. Special instructions
 | Opcode | Mnemonic | Description |
