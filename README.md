@@ -25,15 +25,14 @@ The following table contains the number corresponding to each register that is m
 
 #### 1a. The `flags` register
 ```
- 15          7      4                   0
-+----------+------+----+----+----+----+----+
-| Reserved | IOPL | IF | GF | EF | ZF | IM |
-+----------+------+----+----+----+----+----+
+ 15          6      3                0
++----------+------+----+----+----+----+
+| Reserved | IOPL | IF | GF | EF | ZF |
++----------+------+----+----+----+----+
 ```
 
 | Flag | Length | Description |
 | --- | --- | --- |
-| IM | 1 | ~~Immediate value flag, determines whether an operand will contain an immediate value. This bit is set if the instruction has the `0xFF` prefix~~ (unused) |
 | ZF | 1 |  Zero flag, set by `cmp` when the register in the first operand is equal to 0. |
 | EF | 1 | Equal flag, set by `cmp` when `op1 = op2` |
 | GF | 1 | Greater flag, set by `cmp` when `op1 > op2` |
