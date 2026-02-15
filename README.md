@@ -5,7 +5,7 @@ A hardware program that works on a homemade instruction set
 ### 1. Registers
 The available registers are:
 + `a, b, c, d`, which are the standard 32-bit registers and are all modifiable using the `mov` instructions
-+ `r0`, a special register, the use of which will be explained in section `2a`
++ `r0`, a special register, the use of which will be explained in section `2c`
 + `ip`, the instruction pointer which is indirectly modifiable using `jmp` instructions.
 + `sp`, the stack pointer which is modifiable using the `mov` instructions
 + `flags`, contains various flags about the current instruction, can be modified using `setf` or other instructions (only at `iopl == 0x00`)
