@@ -301,12 +301,11 @@ struct page {
 Page permissions:
 
 ```
- 3   2   1   0
-+---+---+---+---+
-| E | X | W | R |
-+---+---+---+---+
+ 2   1   0
++---+---+---+
+| X | W | R |
++---+---+---+
 ```
-- E: Evictable
 - X: Execute
 - W: Write
 - R: Read
