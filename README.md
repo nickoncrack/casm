@@ -292,8 +292,8 @@ struct page {
   uint32_t physical_addr;
   uint8_t present : 1;
   uint8_t kernel : 1;
-  uint8_t perms : 4;
-  uint8_t reserved : 2;
+  uint8_t perms : 3;
+  uint8_t reserved : 3;
 };
 ```
 
