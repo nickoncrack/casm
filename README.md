@@ -291,12 +291,27 @@ The following page strucutre is used
 struct page {
   uint32_t physical_addr;
   uint8_t present : 1;
-  uint8_t rw : 1;
   uint8_t kernel : 1;
-  uint8_t evictable : 1;
-  uint8_t reserved : 4;
+  uint8_t perms : 4;
+  uint8_t reserved : 2;
 };
 ```
+
+<br>
+Page permissions:
+
+```
+ 3   2   1   0
++---+---+---+---+
+| E | X | W | R |
++---+---+---+---+
+```
+- E: Evictable
+- X: Execute
+- W: Write
+- R: Read
+
+Note: Here X does not imply R, architecturally it does since its the same operation, but a page with X and not R cannot be read from the kernel using the `mov` instructions
 
 #### 5b. Initial memory structure
 This memory structure is temporary and is set up by the CPU after reset. It is standard practice that the kernel copies these mappings into the expanded page table and leave them as is.
