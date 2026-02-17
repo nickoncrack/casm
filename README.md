@@ -318,7 +318,7 @@ This memory structure is temporary and is set up by the CPU after reset. It is s
 | Start VA | Page index | Size | Permissions | Description |
 | --- | --- | --- | --- | --- |
 | `0x00000000` | 0 | 4 KiB | - | Unmapped page for detecting null pointer dereferences |
-| `0x00001000` | 1-128 | 512 KiB | X | BIOS region |
+| `0x00001000` | 1-128 | 512 KiB | RX | BIOS region (does not contain only the binary) |
 | `0x00081000` | 129-134 | 20 KiB | RW | Initial page table |
 | `0x00087000` | 135-2048 | ~7.47 MiB | X | Kernel binary |
 | `0x00801000` | 2049-3969 | 7.5 MiB | RWX | Reserved kernel memory |
