@@ -21,7 +21,6 @@ The following table contains the number corresponding to each register that is m
 | 0x03 | Register D |
 | 0x04 | Register `r0` |
 | 0x05 | Stack pointer (`sp`) |
-| 0x06 | Page table address (`pta`) |
 
 #### 1a. The `flags` register
 ```
@@ -230,14 +229,15 @@ Notice how the instruction at address `0x1000` which is `jmp <main+0>` (or `jmp 
 | 0x18 | MOVW | Moves a 16 bit integer into the given memory address |
 | 0x19 | MOVD | Moves a 32 bit integer into the given memory address |
 | 0x1A | DIV | Divides register A by `op1`, stores the quotient in register A and the remainder in register D. If `op1` is 0, `INT 0` will be triggered |
-| 0x20 | MUL | Multiplies `op1` by `op2` |
-| 0x21 | IRET | Interrupt return; used when the invoked interrupt finishes execution. Pops `flags` and `ip` |
-| 0x22 | PUSHA | Pushes all general purpose registers in the following order: `a, b, c, d` | 
-| 0x23 | POPA | Pops the first 16 bytes of the stack into the general purpose registers in the following order: `d, c, b, a` |
+| 0x1F | MUL | Multiplies `op1` by `op2` |
+| 0x20 | IRET | Interrupt return; used when the invoked interrupt finishes execution. Pops `flags` and `ip` |
+| 0x21 | PUSHA | Pushes all general purpose registers in the following order: `a, b, c, d` | 
+| 0x22 | POPA | Pops the first 16 bytes of the stack into the general purpose registers in the following order: `d, c, b, a` |
 
 #### 3b. Special instructions
 | Opcode | Mnemonic | Description |
 | --- | --- | --- |
+| 0xFD | MDUMP | Prints the specified number of bytes at the specified address into the terminal |
 | 0xFE | DUMP | Debug instruction; dumps the current state of the processor to the terminal |
 | 0xFF | END | Marks the end of the program execution |
 <br>
@@ -324,7 +324,7 @@ This memory structure is temporary and is set up by the CPU after reset. It is s
 | `0x00801000` | 2049-3969 | 7.5 MiB | RWX | Reserved kernel memory |
 | `0x00F82000` | 3970-3972 | 8 KiB | W | Text video buffer |
 | `0x00F85000` | 3973 | 4 KiB | RWX | Interrupt descriptor table |
-| `0x00F86000` | 3974-3999 | 100 KiB | - | Reserved |
+| `0x00F86000` | 3974-3999 | 100 KiB | RWX | Reserved |
 | `0x00FA0000` | 4000-4096 | 384 KiB | RW | Stack |
 <br>
 
