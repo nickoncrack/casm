@@ -1,0 +1,175 @@
+{
+    "setf": {
+        "op": 1,
+        "operands": ["any"]
+    },
+    "add": {
+        "op": 2,
+        "operands": ["reg", "any"]
+    },
+    "mov": {
+        "op": 3,
+        "operands": ["reg", "any"]
+    },
+    "cmp": {
+        "op": 4,
+        "operands": ["reg", "any"]
+    },
+    "jz": {
+        "op": 5,
+        "operands": ["any"]
+    },
+    "jnz": {
+        "op": 6,
+        "operands": ["any"]
+    },
+    "je": {
+        "op": 7,
+        "operands": ["any"]
+    },
+    "jne": {
+        "op": 8,
+        "operands": ["any"]
+    },
+    "jg": {
+        "op": 9,
+        "operands": ["any"]
+    },
+    "jge": {
+        "op": 10,
+        "operands": ["any"]
+    },
+    "jl": {
+        "op": 11,
+        "operands": ["any"]
+    },
+    "jle": {
+        "op": 12,
+        "operands": ["any"]
+    },
+    "push": {
+        "op": 13,
+        "operands": ["any"]
+    },
+    "pop": {
+        "op": 14,
+        "operands": ["reg"]
+    },
+    "call": {
+        "op": 15,
+        "operands": ["any"]
+    },
+    "ret": {
+        "op": 16,
+        "operands": []
+    },
+    "jmp": {
+        "op": 17,
+        "operands": ["any"]
+    },
+    "lidt": {
+        "op": 18,
+        "operands": ["any"]
+    },
+    "int": {
+        "op": 19,
+        "operands": ["int"]
+    },
+    "cli": {
+        "op": 20,
+        "operands": []
+    },
+    "sti": {
+        "op": 21,
+        "operands": []
+    },
+    "sub": {
+        "op": 22,
+        "operands": ["reg", "any"]
+    },
+    "movb": {
+        "op": 23,
+        "operands": ["any", "any"]
+    },
+    "movw": {
+        "op": 24,
+        "operands": ["any", "any"]
+    },
+    "movd": {
+        "op":25,
+        "operands": ["any", "any"]
+    },
+    "div": {
+        "op": 26,
+        "operands": ["any"]
+    },
+    "outd": {
+        "op": 27,
+        "operands": ["int", "reg"]
+    },
+    "ind": {
+        "op": 28,
+        "operands": ["int", "any"]
+    },
+    "outb": {
+        "op": 29,
+        "operands": ["int", "reg"]
+    },
+    "inb": {
+        "op": 30,
+        "operands": ["int", "any"]
+    },
+    "mul": {
+        "op": 31,
+        "operands": ["reg", "any"]
+    },
+    "iret": {
+        "op": 32,
+        "operands": []
+    },
+    "pusha": {
+        "op": 33,
+        "operands": []
+    },
+    "popa": {
+        "op": 34,
+        "operands": []
+    },
+    "or": {
+        "op": 35,
+        "operands": ["reg", "any"]
+    },
+    "xor": {
+        "op": 36,
+        "operands": ["reg", "any"]
+    },
+    "not": {
+        "op": 37,
+        "operands": ["reg"]
+    },
+    "and": {
+        "op": 38,
+        "operands": ["reg", "any"]
+    },
+    "lsh": {
+        "op": 39,
+        "operands": ["reg", "any"]
+    },
+    "rsh": {
+        "op": 40,
+        "operands": ["reg", "any"]
+    },
+
+    "mdump": {
+        "op": 253,
+        "operands": ["int", "int"]
+    },
+    "dump": {
+        "op": 254,
+        "operands": []
+    },
+    "end": {
+        "op": 255,
+        "operands": []
+    }
+}
