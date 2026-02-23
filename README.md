@@ -181,7 +181,8 @@ The prefix itself, consists of 3 sections:
 ```
 
 **i.** Flag
-+ Currently only 1 flag is implemented and for now is the only one necessary: `0b0001`. This is used on an instruction that uses 1 or 2 operands and is used to pass information to the assembler about the data type contained in each operand.
++ If a single bit is set, then that bit defines the memory width for the instruction. (bit 0 = `dword`, bit 1 = `word`, bit 2 = `byte`, bit 3 = base)
+  For example, the prefix of `movd a, [0xFFFF]` would be `0b1000 00 11`
 <br>
 
 **ii.** Operands
@@ -225,14 +226,13 @@ Notice how the instruction at address `0x1000` which is `jmp <main+0>` (or `jmp 
 | 0x14 | CLI | Clear interrupt flag; disables the interrupts |
 | 0x15 | STI | Set interrupt flag; enables the interrupts |
 | 0x16 | SUB | Subtraction between the 2 operands: `op1 -= op2` |
-| 0x17 | MOVB | Moves 1 byte (or an 8 bit integer) into the given memory address: `*op1 = (op2 & 0xFF)` |
-| 0x18 | MOVW | Moves a 16 bit integer into the given memory address |
-| 0x19 | MOVD | Moves a 32 bit integer into the given memory address |
-| 0x1A | DIV | Divides register A by `op1`, stores the quotient in register A and the remainder in register D. If `op1` is 0, `INT 0` will be triggered |
-| 0x1F | MUL | Multiplies `op1` by `op2` |
-| 0x20 | IRET | Interrupt return; used when the invoked interrupt finishes execution. Pops `flags` and `ip` |
-| 0x21 | PUSHA | Pushes all general purpose registers in the following order: `a, b, c, d` | 
-| 0x22 | POPA | Pops the first 16 bytes of the stack into the general purpose registers in the following order: `d, c, b, a` |
+| 0x17 | DIV | Divides register A by `op1`, stores the quotient in register A and the remainder in register D. If `op1` is 0, `INT 0` will be triggered |
+| 0x1A | MUL | Multiplies `op1` by `op2` |
+| 0x1B | IRET | Interrupt return; used when the invoked interrupt finishes execution. Pops `flags` and `ip` |
+| 0x1C | PUSHA | Pushes all general purpose registers in the following order: `a, b, c, d` | 
+| 0x1D | POPA | Pops the first 16 bytes of the stack into the general purpose registers in the following order: `d, c, b, a` |
+
+Note: Any instruction involving memory operations must encode width specifically (i.e. `mov` doesn't allow memory operations, `movd` does)
 
 #### 3b. Special instructions
 | Opcode | Mnemonic | Description |
