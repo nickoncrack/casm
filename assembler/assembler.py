@@ -28,6 +28,8 @@ PRE_REG = 0b00 # operand is a register
 PRE_INT = 0b01 # operand is an immediate integer
 PRE_PTR = 0b10 # operand is a pointer
 
+MEM_WIDTH_SUFFIXES = ("b", "w", "d")
+
 ## errors
 INVALID_OPCODE = -1
 INVALID_COMB = -2
@@ -45,7 +47,7 @@ D_DB = directives[4]
 D_SECT = directives[5]
 
 # registers
-register_list = ("a", "b", "c", "d", "r0", "sp", "pta")
+register_list = ("a", "b", "c", "d", "r0", "sp")
 
 crt_line = 1
 
@@ -56,6 +58,8 @@ def __parse_int(i: str) -> int:
 
     if i.startswith("0x"):
         return int(i, 16)
+    elif i.startswith("0b"):
+        return int(i, 2)
     else:
         return int(i)
     
@@ -72,10 +76,23 @@ def __val_2op(ins: str, operands: List[str]) -> Union[instruction, Literal[-1, -
         return INVALID_COMB
 
     ret: instruction = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-    temp: list = ["any", "any"] # used to test special case
+    operand_types = list()
+
+    try: # we can do this since the opcode is already validated
+        if not instructions[ins[:-1]]["variableMemoryWidth"] or ins[-1] not in MEM_WIDTH_SUFFIXES:
+            return INVALID_OPCODE
+            
+        # +5 since the operands occupy 4 bits and the base instruction bit 1
+        ret[0] = 1 << (MEM_WIDTH_SUFFIXES.index(ins[-1]) + 5)
+        ins = ins[:-1]
+
+        # an instruction with memory suffix accepts all operand types
+        operand_types = ["any", "any"]
+    except KeyError: # base instruction
+        ret[0] = PRE_INS
+        operand_types = instructions[ins]["operands"]
 
     # if an instruction has an 'int' operand, any type of pointer dereference is allowed
-    ret[0] = PRE_INS
     ret[1] = instructions[ins]["op"]
 
     for i in range(2):
@@ -83,19 +100,21 @@ def __val_2op(ins: str, operands: List[str]) -> Union[instruction, Literal[-1, -
         # operand 2 index in ret (i = 1): n + 4 = n + 4i
 
         if operands[i] in register_list:
-            if instructions[ins]["operands"][i] == "int":
+            if operand_types[i] == "int":
                 return INVALID_COMB
             
-            temp[i] = "reg"
             ret[2 + 4*i] = register_list.index(operands[i])
         else: # operand is not a plain register
-            if instructions[ins]["operands"][i] == "reg":
+            if operand_types[i] == "reg":
                 return INVALID_COMB
             
             rshift = abs(i-1) * 2 # 2 if i = 0, 0 if i = 1
 
             # operand is a pointer
             if operands[i][0] == '[' and operands[i][len(operands[i])-1] == ']':
+                if ret[0] == PRE_INS: # base instructions do not allow pointer dereferences
+                    return INVALID_COMB
+
                 ret[0] |= PRE_PTR << rshift # a << 0 = a
                 operands[i] = operands[i][1:-1]
             else:
@@ -117,21 +136,16 @@ def __val_2op(ins: str, operands: List[str]) -> Union[instruction, Literal[-1, -
                 ret[3 + 4*i] = op1h & 0xFF        # byte 1
                 ret[4 + 4*i] = (op1l >> 8) & 0xFF # byte 2
                 ret[5 + 4*i] = op1l & 0xFF        # byte 3
-
-                temp[i] = "int"
             except ValueError:
                 # check if operand is a register (i.e. movb a, [b])
                 if operands[i] in register_list: # operand is already stripped
-                    temp[i] = "int"
                     ret[2 + 4*i] = register_list.index(operands[i])
                 else:
                     return INVALID_COMB
 
-    # special cases
-    if ret[0] & (PRE_PTR << 2) and ins == "mov":
-        return INVALID_COMB # operand size is unspecified
-    if ~ret[0] & (PRE_PTR << 2) and ret[0] & (PRE_INT << 2) and ins.startswith("mov"):
-        return INVALID_COMB # mov[x] instructions cannot have an immediate integer as the first operand
+    # if the instruction contains memory operations, the first operand cannot contain an immediate integer
+    if ret[0] & 0b1110_01_00 == ret[0]:
+        return INVALID_COMB
          
     return ret
     
@@ -139,16 +153,32 @@ def __val_2op(ins: str, operands: List[str]) -> Union[instruction, Literal[-1, -
 def __val_1op(ins: str, operand: str) -> Union[instruction, Literal[-1, -2]]:
     ret: instruction = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 
-    ret[0] = PRE_INS
+    try: # we can do this since the opcode is already validated
+        if ins not in instructions:
+            if not instructions[ins[:-1]]["variableMemoryWidth"] or ins[-1] not in MEM_WIDTH_SUFFIXES:
+                return INVALID_OPCODE
+                
+            # +5 since the operands occupy 4 bits and the base instruction bit 1
+            ret[0] = 1 << (MEM_WIDTH_SUFFIXES.index(ins[-1]) + 5)
+            ins = ins[:-1]
+
+            # an instruction with memory suffix accepts all operand types
+            operand_types = ["any", "any"]
+        else:
+            operand_types = instructions[ins]["operands"]
+    except KeyError: # base instruction
+        ret[0] = PRE_INS
+        operand_types = instructions[ins]["operands"]
+
     ret[1] = instructions[ins]["op"]
 
     if operand in register_list:
-        if instructions[ins]["operands"][0] == "int":
+        if operand_types[0] == "int":
             return INVALID_COMB
         
         ret[2] = register_list.index(operand)
     else:
-        if instructions[ins]["operands"][0] == "reg":
+        if operand_types[0] == "reg":
             return INVALID_COMB
 
         if operand[0] == '[' and operand[-1] == ']':
@@ -286,10 +316,6 @@ def __sym_ref(op: str) -> Union[str, instruction]:
         # 1 line that converts symbol references to their values and string integers to integers
         s = sum([((__parse_int(x) if x[1:] not in sym_table else -sym_table[x[1:]]) if x not in sym_table else sym_table[x]) for x in split])
 
-        # if ptr:
-        #     if "$.data" in sym_table and s < sym_table["$.code"] and (s + sym_table["$.data"]) > sym_table["$.code"]:
-        #         warning("")
-
         sh = (s >> 16) & 0xFFFF
         sl = s & 0xFFFF
 
@@ -345,10 +371,8 @@ def parse_instruction(ins: str) -> Union[instruction, Literal[0, -1, -2], List[i
 
     opcode = s[0]
 
-    ret: instruction = [0, 0, 0, 0, 0, 0, 0, 0, 0 ,0]
-
-    # parse directives or return INVALID_OPCODE
-    if opcode not in instructions:
+    if opcode not in instructions and opcode[:-1] not in instructions:
+        # parse directives
         if s[1].startswith(D_DEF):
             # <symbol> def <addr>
             split = s[1].split()
@@ -379,7 +403,7 @@ def parse_instruction(ins: str) -> Union[instruction, Literal[0, -1, -2], List[i
 
             return 0
         elif s[0][0] == 'd': # might be a d[x] directive
-            if s[0][1] not in ('b', 'w', 'd') or len(s) > 2:
+            if s[0][1] not in MEM_WIDTH_SUFFIXES or len(s) > 2:
                 return INVALID_OPCODE
             
             # d[x] instructions are exclusive to .data
@@ -407,9 +431,13 @@ def parse_instruction(ins: str) -> Union[instruction, Literal[0, -1, -2], List[i
 
             return 0
 
+    try:
+        operands = instructions[opcode]["operands"]
+    except KeyError:
+        operands = instructions[opcode[:-1]]["operands"]
 
     # in 2 operand instruction can reference a symbol in the second operand
-    if len(instructions[opcode]["operands"]) == 2:
+    if len(operands) == 2:
         try:
             split = s[1].split(sep=',') # split the opearnds
             split[1] = split[1].strip()
@@ -429,7 +457,7 @@ def parse_instruction(ins: str) -> Union[instruction, Literal[0, -1, -2], List[i
                 return __val_2op(opcode, split) # type: ignore
         except IndexError:
             return INVALID_COMB
-    elif len(instructions[opcode]["operands"]) == 1:
+    elif len(operands) == 1:
         try:
             op = s[1]
         except IndexError:
@@ -449,6 +477,7 @@ def parse_instruction(ins: str) -> Union[instruction, Literal[0, -1, -2], List[i
         if len(s) != 1:
             return INVALID_COMB
         
+        ret: instruction = [0, 0, 0, 0, 0, 0, 0, 0, 0 ,0]
         ret[0] = 0x00
         ret[1] = instructions[opcode]["op"]
         ret[2] = 0x00
@@ -479,11 +508,11 @@ def parse_program(file: str) -> Union[List[instruction], Literal[0]]:
         lines.pop(0) # remove entry directive
         crt_line += 1
     else:
-        print(f"No entry directive found. Defaulting to {entry_point}.")
+        print(f"No entry directive found. Defaulting to {hex(entry_point)}.")
 
     sym_table["$"] = entry_point + 0x0A + 0x04 # current byte pointer
 
-    # text section parsing
+    # code section parsing
     n = 0 # nth instruction
 
     for i in range(len(lines)):
@@ -533,31 +562,9 @@ def parse_program(file: str) -> Union[List[instruction], Literal[0]]:
     return ret
 
 
-bios_functions = ("BIOS_print", "BIOS_sprint")
 if __name__ == "__main__":
-    # if bios = True then the assembler will search for bios functions in the binary and save their addresses into a jump table
-    # which will be placed at the beginning of the .data section
-    bios = True
-
     start = time.time()
-
-    if bios:
-        p = parse_program("assembler/bios")
-    else:
-        p = parse_program("assembler/test")
-
-    if bios:
-        for i in sym_table:
-            if i in bios_functions:
-                idx = bios_functions.index(i)
-                try:
-                    data_section[4 * idx + 0] = (sym_table[i] >> 0x18) & 0xFF
-                    data_section[4 * idx + 1] = (sym_table[i] >> 0x10) & 0xFF
-                    data_section[4 * idx + 2] = (sym_table[i] >> 0x08) & 0xFF
-                    data_section[4 * idx + 3] = (sym_table[i] >> 0x00) & 0xFF
-                except IndexError:
-                    print("Not enough bytes allocated for the bios jump table.")
-                    sys.exit(0)
+    p = parse_program("programs/test")
 
     p.insert(0, data_section) # type: ignore
     p.insert(0, int(sym_table[SECT_CODE]).to_bytes(4, "big")) # type: ignore
@@ -583,17 +590,8 @@ if __name__ == "__main__":
     delta = time.time() - start
     print(f"Assembly completed in {round(delta * 1000, 4)}ms")
 
-    # for i in sym_table:
-    #     print(f"{i}: {hex(sym_table[i])}")
 
-    if bios:
-        f = open("assembler/bios.bin", "wb")
-    else:
-        f = open("assembler/out.bin", "wb")
-
-    # align to instruction size
-    # data_section.extend(bytearray((0x00,) * (INSTRUCTION_SIZE - len(data_section) % INSTRUCTION_SIZE))) # type: ignore
+    f = open("programs/bin/test.bin", "wb")
 
     for i in range(len(p)): # type: ignore
-        # print(f"{hex(entry_point + i * INSTRUCTION_SIZE)}: {list(map(lambda l: hex(l)[2:].zfill(2), p[i]))}") # type: ignore
         f.write(bytearray(p[i])) # type: ignore
