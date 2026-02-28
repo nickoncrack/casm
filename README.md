@@ -2,11 +2,47 @@
 A hardware program that works on a homemade instruction set
 
 ## How it works
+### 0. Definitions
+
+#### 0a. General architecture
++ All general purpose registers, and special registers (except `flags`) are 32 bits wide.
++ **Fixed instruction length**: All instructions are 10 bytes long.
++ **Paging**: Paging is always enabled. Page size is fixed to 4 KiB.
++ **Privilege levels**: Controlled by the 3 bit `IOPL` field in the `flags` register (0 = BIOS, 1 = kernel, higher = user)
++ On `INT n`, if current_IOPL > required_caller_IOPL, a privilege exception is raised before state modification.
+
+#### 0b. Notation
++ `op1, op2`: Operands of an instruction
++ `[addr]`: Memory dereference
++ `addr+10`: Symbolic reference (strictly in bytes)
++ `instruction[x]`: Any width variant
+
+#### 0c. Data types
+| Type | Width | Range |
+| --- | --- | --- |
+| byte | 8 bit | 0-255 |
+| word | 16 bit | 0-65,535 |
+| dword | 32 bit | 0-4,294,967,295 |
+
++ All instructions involving a memory operation must explicitly specify width (`movb`, `movw`, `movd`, etc.)
++ Instructions without an explicit width that attempt memory dereference cause an invalid opcode exception.
++ If an operand exceeds the maximum value of its data type, it will be replaced by that maximum value
+
+#### 0d. Endianness
++ **Memory**: big endian
++ **Instruction operands**: big endian (see section 2e for exact byte layout)
++ **Registers**: endian neutral
++ In this document `bit 0` refers to the least significant bit.
+
+#### 0.e Stack
++ Grows downwards (stack pointer is decremented on push)
++ All of the following operations: `push`, `pop`, `call`, `ret` are dword by default 
+
 ### 1. Registers
 The available registers are:
 + `a, b, c, d`, which are the standard 32-bit registers and are all modifiable using the `mov` instructions
 + `r0`, a special register, the use of which will be explained in section `2c`
-+ `ip`, the instruction pointer which is indirectly modifiable using `jmp` instructions.
++ `ip`, points to the first byte of the current instruction
 + `sp`, the stack pointer which is modifiable using the `mov` instructions
 + `flags`, contains various flags about the current instruction, can be modified using `setf` or other instructions (only at `iopl == 0x00`)
 + `pta`, page table address, contains the physical address of the page table. (section 5a)
@@ -21,6 +57,8 @@ The following table contains the number corresponding to each register that is m
 | 0x03 | Register D |
 | 0x04 | Register `r0` |
 | 0x05 | Stack pointer (`sp`) |
+
++ `ip`, `flags` and `pta` are not directly accessible via `mov`.
 
 #### 1a. The `flags` register
 ```
@@ -38,6 +76,13 @@ The following table contains the number corresponding to each register that is m
 | IF | 1 | Interrupt flag; if set, interrupts are enabled. Can be toggled using `cli` and `sti` |
 | IOPL | 3 | Current I/O privilege level, readonly for `iopl > 0x00` |
 
+#### 1b. Processor state on kernel entry
++ `flags` = `0x0010` (iopl = 1)
++ `ip` = `0x00010000`
++ `sp` = `0x00FFFFFF`
++ `pta` = `0x00081000`
++ `a,b,c,d` = `0x00000000`
+
 ### 2. Assembler
 + The assembler parses the code line by line
 + If a symbolic reference is found, i.e. a function (`func`), an operation between symbols and registers (`func+a+10`), the assembler will call `__sym_ref()`
@@ -49,7 +94,7 @@ Directives are pseudo-instructions that are executed by the assembler during com
 + `entry <addr>`: Sets the program entry point, defaulting to `0x00010000`. Can be only placed on the first line of the program.
 + `section <.data/.code>`: Used to define a program section. `.data` section contains preallocated variables and `.code` contains the code of the program
 + `<symbol> def <addr>`: Assignes the given address to the given symbol in the symbol table (i.e. `sym_table[symbol] = addr`).
-+ `d[x] <value>`: Allocates a number of bytes, depending on `x` (`db`, `dw`, etc.), and assignes a value to them, cannot be used in the `.code` section. 
++ `d[x] <value>`: Allocates a number of bytes, depending on `x` (`db`, `dw`, etc.), and assignes a value to them, cannot be used in the `.code` section. The assembler supports ASCII string definitions using `db`.
 
 #### 2b. Predefined symbols
 | Symbol | Description |
