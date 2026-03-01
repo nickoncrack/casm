@@ -1,7 +1,7 @@
 # casm
 A hardware program that works on a homemade instruction set
 
-## How it works
+## Documentation
 ### 0. Definitions
 
 #### 0a. General architecture
