@@ -10,6 +10,7 @@ A hardware program that works on a homemade instruction set
 + **Paging**: Paging is always enabled. Page size is fixed to 4 KiB.
 + **Privilege levels**: Controlled by the 3 bit `IOPL` field in the `flags` register (0 = BIOS, 1 = kernel, higher = user)
 + On `INT n`, if current_IOPL > required_caller_IOPL, a privilege exception is raised before state modification.
++ The virtual address of the page table across all address spaces is the same.
 
 #### 0b. Notation
 + `op1, op2`: Operands of an instruction
@@ -34,7 +35,7 @@ A hardware program that works on a homemade instruction set
 + **Registers**: endian neutral
 + In this document `bit 0` refers to the least significant bit.
 
-#### 0.e Stack
+#### 0e. Stack
 + Grows downwards (stack pointer is decremented on push)
 + All of the following operations: `push`, `pop`, `call`, `ret` are dword by default 
 
