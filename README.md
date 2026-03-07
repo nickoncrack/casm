@@ -31,7 +31,7 @@ A hardware program that works on a homemade instruction set
 
 #### 0d. Endianness
 + **Memory**: big endian
-+ **Instruction operands**: big endian (see section 2e for exact byte layout)
++ **Instruction operands**: big endian (see section 2f for exact byte layout)
 + **Registers**: endian neutral
 + In this document `bit 0` refers to the least significant bit.
 
@@ -46,7 +46,6 @@ The available registers are:
 + `ip`, points to the first byte of the current instruction
 + `sp`, the stack pointer which is modifiable using the `mov` instructions
 + `flags`, contains various flags about the current instruction, can be modified using `setf` or other instructions (only at `iopl == 0x00`)
-+ `pta`, page table address, contains the physical address of the page table. (section 5a)
 
 As explained below, registers are passed as numbers in the high byte of an operand.
 The following table contains the number corresponding to each register that is modifiable by the `mov` instructions
@@ -59,7 +58,7 @@ The following table contains the number corresponding to each register that is m
 | 0x04 | Register `r0` |
 | 0x05 | Stack pointer (`sp`) |
 
-+ `ip`, `flags` and `pta` are not directly accessible via `mov`.
++ `ip` and `flags` are not directly accessible via `mov`.
 
 #### 1a. The `flags` register
 ```
@@ -95,14 +94,19 @@ Directives are pseudo-instructions that are executed by the assembler during com
 + `entry <addr>`: Sets the program entry point, defaulting to `0x00010000`. Can be only placed on the first line of the program.
 + `section <.data/.code>`: Used to define a program section. `.data` section contains preallocated variables and `.code` contains the code of the program
 + `<symbol> def <addr>`: Assignes the given address to the given symbol in the symbol table (i.e. `sym_table[symbol] = addr`).
-+ `d[x] <value>`: Allocates a number of bytes, depending on `x` (`db`, `dw`, etc.), and assignes a value to them, cannot be used in the `.code` section. The assembler supports ASCII string definitions using `db`.
++ `(<symbol>) d[x] <value>`: Allocates a number of bytes, depending on `x` (`db`, `dw`, etc.), and assignes a value to them, cannot be used in the `.code` section. The assembler supports ASCII string definitions using `db`.
++ `(<symbol>) ds <value>`: Allocates a number of bytes, depending on the size of the referenced struct and assignes that struct as the symbol's data type. 
++ `struct <name>`: Defines a struct (read section 2d)
++ `end_struct`: Ends the definition of the struct.
 
 #### 2b. Predefined symbols
 | Symbol | Description |
 | --- | --- |
 | `$` | Address index pointer, i.e. points to the current instruction or index in `.data` |
 | `$.data` | Points to the start of `.data` (used internally) |
-| `$.code` | Points to the start of `.code` |
+| `$.code` | Points to the start of `.code` (used internally) |
+
++ These symbols are the only ones in the assembler's symbol table that have no data type.
 
 Usage:
 ```asm
@@ -144,8 +148,38 @@ where `r0` is a special register that is used in this kind of operations. It can
 
 Since a register isn't a compile time constant, meaning we can't find it's value during assembly we have to do this *expansion*. On the other hand, `func+10` ___is___ a compile time constant so we can calculate it's value in the assembly process and replace it.
 
++ Each external symbol has a data type. The default type identifiers are identical to the memory width suffixes.
 
-#### 2d. Stages of the assembly
+#### 2d. Structs
+A struct is a custom data type that can be defined in `.data` in the following way:
+```asm
+section .data
+struct st
+    a db
+    b db
+    c dd
+end_struct
+
+value ds st
+```
+
++ It is obvious that the members of a struct use the partial syntax of `d[x]` (except `ds`) directives as they do not have an assigned value. If a value is assigned to a struct member, an error will be thrown.
++ Nested structs are allowed:
+```asm
+section .data
+struct st2
+    a db
+    b dw
+    c ds st
+end_struct
+
+value2 ds st2
+```
+
++ Struct members can be accessed using a dot and then the member's identifier, just like most lnguages: `value2.c.a`
++ This allows for $n$ nested structs: $\textnormal{value}\rightarrow s_1\rightarrow s_2\rightarrow\cdots\rightarrow s_n$
+
+#### 2e. Stages of the assembly
 Suppose we have the following program (which is unnecessarily *complicated* for the sake of explaining the inner workings of the assembler):
 
 ```asm
@@ -189,7 +223,7 @@ jmp r0
 This snippet, although it's assembly, it isn't easily readable since the symbols have been replaced with their corresponding addresses and inline operations have been expanded into multiple instructions. This *first stage* of the assembly is internal and not outputted by the assembler, however, these instructions are ready to be directly converted into machine code, which is the second (and final) stage of the assembly.
 
 
-#### 2e. Machine code
+#### 2f. Machine code
 Using the following table I will explain how the machine code is generated by splitting an instruction into 3 parts:
 
 1. The instruction prefix
