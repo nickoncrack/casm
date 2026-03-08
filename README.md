@@ -256,6 +256,7 @@ addr     op    operand 1   operand 2      <sym+i>     instruction
 
 1. The instruction prefix is a single byte that is placed before the opcode and is used to give information to the processor about the operands of the current instruction. (corresponds to the first byte of the `op` column)
 <br>
+
 The prefix itself, consists of 3 sections (does **not** apply for `movs`, see section `3b`):
 
 
