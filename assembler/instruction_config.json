@@ -1,175 +1,193 @@
 {
     "setf": {
         "op": 1,
-        "operands": ["any"]
+        "operands": ["any"],
+        "variableMemoryWidth": false
     },
     "add": {
         "op": 2,
-        "operands": ["reg", "any"]
+        "operands": ["reg", "any"],
+        "variableMemoryWidth": true
     },
     "mov": {
         "op": 3,
-        "operands": ["reg", "any"]
+        "operands": ["reg", "any"],
+        "variableMemoryWidth": true
     },
     "cmp": {
         "op": 4,
-        "operands": ["reg", "any"]
+        "operands": ["reg", "any"],
+        "variableMemoryWidth": false
     },
     "jz": {
         "op": 5,
-        "operands": ["any"]
+        "operands": ["any"],
+        "variableMemoryWidth": false
     },
     "jnz": {
         "op": 6,
-        "operands": ["any"]
+        "operands": ["any"],
+        "variableMemoryWidth": false
     },
     "je": {
         "op": 7,
-        "operands": ["any"]
+        "operands": ["any"],
+        "variableMemoryWidth": false
     },
     "jne": {
         "op": 8,
-        "operands": ["any"]
+        "operands": ["any"],
+        "variableMemoryWidth": false
     },
     "jg": {
         "op": 9,
-        "operands": ["any"]
+        "operands": ["any"],
+        "variableMemoryWidth": false
     },
     "jge": {
         "op": 10,
-        "operands": ["any"]
+        "operands": ["any"],
+        "variableMemoryWidth": false
     },
     "jl": {
         "op": 11,
-        "operands": ["any"]
+        "operands": ["any"],
+        "variableMemoryWidth": false
     },
     "jle": {
         "op": 12,
-        "operands": ["any"]
+        "operands": ["any"],
+        "variableMemoryWidth": false
     },
     "push": {
         "op": 13,
-        "operands": ["any"]
+        "operands": ["any"],
+        "variableMemoryWidth": true
     },
     "pop": {
         "op": 14,
-        "operands": ["reg"]
+        "operands": ["reg"],
+        "variableMemoryWidth": true
     },
     "call": {
         "op": 15,
-        "operands": ["any"]
+        "operands": ["any"],
+        "variableMemoryWidth": false
     },
     "ret": {
         "op": 16,
-        "operands": []
+        "operands": [],
+        "variableMemoryWidth": false
     },
     "jmp": {
         "op": 17,
-        "operands": ["any"]
+        "operands": ["any"],
+        "variableMemoryWidth": false
     },
     "lidt": {
         "op": 18,
-        "operands": ["any"]
+        "operands": ["any"],
+        "variableMemoryWidth": false
     },
     "int": {
         "op": 19,
-        "operands": ["int"]
+        "operands": ["int"],
+        "variableMemoryWidth": false
     },
     "cli": {
         "op": 20,
-        "operands": []
+        "operands": [],
+        "variableMemoryWidth": false
     },
     "sti": {
         "op": 21,
-        "operands": []
+        "operands": [],
+        "variableMemoryWidth": false
     },
     "sub": {
         "op": 22,
-        "operands": ["reg", "any"]
-    },
-    "movb": {
-        "op": 23,
-        "operands": ["any", "any"]
-    },
-    "movw": {
-        "op": 24,
-        "operands": ["any", "any"]
-    },
-    "movd": {
-        "op":25,
-        "operands": ["any", "any"]
+        "operands": ["reg", "any"],
+        "variableMemoryWidth": true
     },
     "div": {
-        "op": 26,
-        "operands": ["any"]
+        "op": 23,
+        "operands": ["any"],
+        "variableMemoryWidth": false
     },
-    "outd": {
-        "op": 27,
-        "operands": ["int", "reg"]
+    "in": {
+        "op": 24,
+        "operands": ["int", "any"],
+        "variableMemoryWidth": false
     },
-    "ind": {
-        "op": 28,
-        "operands": ["int", "any"]
-    },
-    "outb": {
-        "op": 29,
-        "operands": ["int", "reg"]
-    },
-    "inb": {
-        "op": 30,
-        "operands": ["int", "any"]
+    "out": {
+        "op": 25,
+        "operands": ["int", "reg"],
+        "variableMemoryWidth": false
     },
     "mul": {
-        "op": 31,
-        "operands": ["reg", "any"]
+        "op": 26,
+        "operands": ["reg", "any"],
+        "variableMemoryWidth": false
     },
     "iret": {
-        "op": 32,
-        "operands": []
+        "op": 27,
+        "operands": [],
+        "variableMemoryWidth": false
     },
     "pusha": {
-        "op": 33,
-        "operands": []
+        "op": 28,
+        "operands": [],
+        "variableMemoryWidth": false
     },
     "popa": {
-        "op": 34,
-        "operands": []
+        "op": 29,
+        "operands": [],
+        "variableMemoryWidth": false
     },
     "or": {
-        "op": 35,
-        "operands": ["reg", "any"]
+        "op": 30,
+        "operands": ["reg", "any"],
+        "variableMemoryWidth": false
     },
     "xor": {
-        "op": 36,
-        "operands": ["reg", "any"]
+        "op": 31,
+        "operands": ["reg", "any"],
+        "variableMemoryWidth": false
     },
     "not": {
-        "op": 37,
-        "operands": ["reg"]
+        "op": 32,
+        "operands": ["reg"],
+        "variableMemoryWidth": false
     },
     "and": {
-        "op": 38,
-        "operands": ["reg", "any"]
+        "op": 33,
+        "operands": ["reg", "any"],
+        "variableMemoryWidth": false
     },
     "lsh": {
-        "op": 39,
-        "operands": ["reg", "any"]
+        "op": 34,
+        "operands": ["reg", "any"],
+        "variableMemoryWidth": false
     },
     "rsh": {
-        "op": 40,
-        "operands": ["reg", "any"]
+        "op": 35,
+        "operands": ["reg", "any"],
+        "variableMemoryWidth": false
     },
 
     "mdump": {
         "op": 253,
-        "operands": ["int", "int"]
+        "operands": ["int", "int"],
+        "variableMemoryWidth": false
     },
     "dump": {
         "op": 254,
-        "operands": []
+        "operands": [],
+        "variableMemoryWidth": false
     },
     "end": {
         "op": 255,
-        "operands": []
+        "operands": [],
+        "variableMemoryWidth": false
     }
 }
