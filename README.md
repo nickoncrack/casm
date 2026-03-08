@@ -112,13 +112,13 @@ Directives are pseudo-instructions that are executed by the assembler during com
 Usage:
 ```asm
 section .data
-  dd 0x00
-  dw 0x00
-  test def $ - 0x06 ; size is ambiguous
+    dd 0x00
+    dw 0x00
+    test def $ - 0x06 ; size is ambiguous
 
 section .code
 main:
-  movd a, [test] ; mov[x] instructions fix the ambiguity
+    movd a, [test] ; mov[x] instructions fix the ambiguity
 ```
 <br>
 
