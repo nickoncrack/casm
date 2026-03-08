@@ -17,6 +17,7 @@ A hardware program that works on a homemade instruction set
 + `[addr]`: Memory dereference
 + `addr+10`: Symbolic reference (strictly in bytes)
 + `instruction[x]`: Any width variant
++ In this document a semicolon is used to denote a comment inside a code block, in to-be-assembled code `//` must be used instead.
 
 #### 0c. Data types
 | Type | Width | Range |
@@ -34,7 +35,6 @@ A hardware program that works on a homemade instruction set
 + **Instruction operands**: big endian (see section `2f` for exact byte layout)
 + **Registers**: endian neutral
 + In this document `bit 0` refers to the least significant bit.
-+ In this document a semicolon is used to denote a comment inside a code block, in to-be-assembled code `//` must be used instead.
 
 #### 0e. Stack
 + Grows downwards (stack pointer is decremented on push)
