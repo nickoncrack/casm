@@ -150,8 +150,6 @@ def __val_2op(ins: str, operands: List[str]) -> Union[instruction, Literal[-1, -
                 ret[4 + 4*i] = (op1l >> 8) & 0xFF # byte 2
                 ret[5 + 4*i] = op1l & 0xFF        # byte 3
             except ValueError as e:
-                #raise e
-
                 # check if operand is a register (i.e. movb a, [b])
                 if operands[i] in register_list: # operand is already stripped
                     ret[2 + 4*i] = register_list.index(operands[i])
