@@ -146,8 +146,7 @@ jmp r0
 ```
 where `r0` is a special register that is used in this kind of operations. It can be used by the programmer as a general purpose register but this kind of use is non-standard.
 
-Since a register isn't a compile time constant, meaning we can't find it's value during assembly we have to do this *expansion*. On the other hand, `func+10` ___is___ a compile time constant so we can calculate it's value in the assembly process and replace it.
-
++ Symbolic expressions that also contain registers on the first operand are illegal.
 + Each external symbol has a data type. The default type identifiers are identical to the memory width suffixes.
 
 #### 2d. Structs
