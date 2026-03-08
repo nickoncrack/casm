@@ -177,6 +177,11 @@ value2 ds st2
 
 + Struct members can be accessed using a dot and then the member's identifier, just like most lnguages: `value2.c.a`
 + This allows for $n$ nested structs: $\textnormal{value}\rightarrow s_1\rightarrow s_2\rightarrow\cdots\rightarrow s_n$
++ Memory operations with structs are allowed using the `movs` instruction:
+```asm
+movs [st], [0xFFFFF] ; read struct from memory
+movs [0xFFFFF], [st] ; write struct to memory
+```
 
 #### 2e. Stages of the assembly
 Suppose we have the following program (which is unnecessarily *complicated* for the sake of explaining the inner workings of the assembler):
