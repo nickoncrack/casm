@@ -31,9 +31,10 @@ A hardware program that works on a homemade instruction set
 
 #### 0d. Endianness
 + **Memory**: big endian
-+ **Instruction operands**: big endian (see section 2f for exact byte layout)
++ **Instruction operands**: big endian (see section `2f` for exact byte layout)
 + **Registers**: endian neutral
 + In this document `bit 0` refers to the least significant bit.
++ In this document a semicolon is used to denote a comment inside a code block, in to-be-assembled code `//` must be used instead.
 
 #### 0e. Stack
 + Grows downwards (stack pointer is decremented on push)
@@ -96,7 +97,7 @@ Directives are pseudo-instructions that are executed by the assembler during com
 + `<symbol> def <addr>`: Assignes the given address to the given symbol in the symbol table (i.e. `sym_table[symbol] = addr`).
 + `(<symbol>) d[x] <value>`: Allocates a number of bytes, depending on `x` (`db`, `dw`, etc.), and assignes a value to them, cannot be used in the `.code` section. The assembler supports ASCII string definitions using `db`.
 + `(<symbol>) ds <value>`: Allocates a number of bytes, depending on the size of the referenced struct and assignes that struct as the symbol's data type. 
-+ `struct <name>`: Defines a struct (read section 2d)
++ `struct <name>`: Defines a struct (section `2d`)
 + `end_struct`: Ends the definition of the struct.
 
 #### 2b. Predefined symbols
@@ -175,6 +176,7 @@ end_struct
 value2 ds st2
 ```
 
++ The maximum size of a struct is 255 bytes. (section `3b`)
 + Struct members can be accessed using a dot and then the member's identifier, just like most lnguages: `value2.c.a`
 + This allows for $n$ nested structs: $\textnormal{value}\rightarrow s_1\rightarrow s_2\rightarrow\cdots\rightarrow s_n$
 + Memory operations with structs are allowed using the `movs` instruction:
@@ -254,7 +256,7 @@ addr     op    operand 1   operand 2      <sym+i>     instruction
 
 1. The instruction prefix is a single byte that is placed before the opcode and is used to give information to the processor about the operands of the current instruction. (corresponds to the first byte of the `op` column)
 <br>
-The prefix itself, consists of 3 sections:
+The prefix itself, consists of 3 sections (does **not** apply for `movs`, see section `3b`):
 
 
 ```
@@ -315,6 +317,7 @@ Notice how the instruction at address `0x1000` which is `jmp <main+0>` (or `jmp 
 | 0x1B | IRET | Interrupt return; used when the invoked interrupt finishes execution. Pops `flags` and `ip` |
 | 0x1C | PUSHA | Pushes all general purpose registers in the following order: `a, b, c, d` | 
 | 0x1D | POPA | Pops the first 16 bytes of the stack into the general purpose registers in the following order: `d, c, b, a` |
+| 0x24 | MOVS | Reads/writes a struct from memory (section `3b`) |
 
 Note: Any instruction involving memory operations must encode width specifically (i.e. `mov` doesn't allow memory operations, `movd` does)
 
@@ -324,6 +327,13 @@ Note: Any instruction involving memory operations must encode width specifically
 | 0xFD | MDUMP | Prints the specified number of bytes at the specified address into the terminal |
 | 0xFE | DUMP | Debug instruction; dumps the current state of the processor to the terminal |
 | 0xFF | END | Marks the end of the program execution |
+<br>
+
++ The `movs` instruction is separate from `mov[x]` because it works differently. `movs` is the only instruction with a non fixed memory width as it depends on the referenced struct and it also has a fixed syntax:
+```asm
+movs [int], [int] ; registers are not allowed
+```
+Consequently, the standard prefix is redundant. However, in order to address the problem caused by variable memory width the prefix will be repurposed and for `movs` **only**, the prefix will contain the struct size, therefore, the maximum struct size is 255 bytes.
 <br>
 
 ### 4. Interrupts
