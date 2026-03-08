@@ -22,13 +22,13 @@ SECT_CODE = "$.code"
 SECT_DATA = "$.data"
 
 ## prefixes
-PRE_INS = 0b00010000 # instruction prefix
+PRE_BASE = 0b00010000 # instruction prefix
 # use rshift by 2 to set the first operand
 PRE_REG = 0b00 # operand is a register
 PRE_INT = 0b01 # operand is an immediate integer
 PRE_PTR = 0b10 # operand is a pointer
 
-MEM_WIDTH_SUFFIXES = ("b", "w", "d")
+MEM_WIDTH_SUFFIXES = ("b", "w", "d", "s")
 
 ## errors
 INVALID_OPCODE = -1
@@ -36,20 +36,33 @@ INVALID_COMB = -2
 OUT_OF_BOUNDS = -3
 
 instructions: dict = json.load(open("assembler/instruction_config.json"))
-directives = ("entry", "def", "db", "dw", "db", "section")
 
 # directives
-D_ENTRY = directives[0]
-D_DEF = directives[1]
-D_DB = directives[2]
-D_DW = directives[3]
-D_DB = directives[4]
-D_SECT = directives[5]
+D_ENTRY = "entry"
+D_DEF = "def"
+D_DB = "db"
+D_DW = "dw"
+D_DD = "dd"
+D_DS = "ds"
+D_SECT = "section"
+D_STRUCT = "struct"
+D_ESTRUCT = "end_struct"
 
 # registers
 register_list = ("a", "b", "c", "d", "r0", "sp")
 
+lines: List[str] = []
 crt_line = 1
+
+sym_table: dict = {}
+type_table: dict[str, dict] = {
+    "b": {"size": 1},
+    "w": {"size": 2},
+    "d": {"size": 4}
+}
+
+data_section = bytearray()
+entry_point: int = 0x00010000
 
 # parse hex or decimal string to int
 # internal function where we want the caller to handle the ValueError
@@ -89,7 +102,7 @@ def __val_2op(ins: str, operands: List[str]) -> Union[instruction, Literal[-1, -
         # an instruction with memory suffix accepts all operand types
         operand_types = ["any", "any"]
     except KeyError: # base instruction
-        ret[0] = PRE_INS
+        ret[0] = PRE_BASE
         operand_types = instructions[ins]["operands"]
 
     # if an instruction has an 'int' operand, any type of pointer dereference is allowed
@@ -112,7 +125,7 @@ def __val_2op(ins: str, operands: List[str]) -> Union[instruction, Literal[-1, -
 
             # operand is a pointer
             if operands[i][0] == '[' and operands[i][len(operands[i])-1] == ']':
-                if ret[0] == PRE_INS: # base instructions do not allow pointer dereferences
+                if ret[0] == PRE_BASE: # base instructions do not allow pointer dereferences
                     return INVALID_COMB
 
                 ret[0] |= PRE_PTR << rshift # a << 0 = a
@@ -136,7 +149,9 @@ def __val_2op(ins: str, operands: List[str]) -> Union[instruction, Literal[-1, -
                 ret[3 + 4*i] = op1h & 0xFF        # byte 1
                 ret[4 + 4*i] = (op1l >> 8) & 0xFF # byte 2
                 ret[5 + 4*i] = op1l & 0xFF        # byte 3
-            except ValueError:
+            except ValueError as e:
+                #raise e
+
                 # check if operand is a register (i.e. movb a, [b])
                 if operands[i] in register_list: # operand is already stripped
                     ret[2 + 4*i] = register_list.index(operands[i])
@@ -167,7 +182,7 @@ def __val_1op(ins: str, operand: str) -> Union[instruction, Literal[-1, -2]]:
         else:
             operand_types = instructions[ins]["operands"]
     except KeyError: # base instruction
-        ret[0] = PRE_INS
+        ret[0] = PRE_BASE
         operand_types = instructions[ins]["operands"]
 
     ret[1] = instructions[ins]["op"]
@@ -229,15 +244,67 @@ def __reg_refs(op: list) -> List: # [nrefs, regs]
 
     return ret
 
+# parse (nested) struct references
+def __parse_nsref(op: str) -> int:
+    split = op.split(".")
 
-sym_table: dict = {}
-data_section = bytearray()
+    if split[0] not in sym_table or sym_table[split[0]]["type"] in ("b", "w", "d"):
+        raise Exception(f"Symbol `{split[0]}` is not a struct")
 
-entry_point: int = 0x00010000
+    c_off = 0 # cumulative offset
+    prev = sym_table[split[0]]["type"]
+    for i in range(1, len(split)):
+        # chcek if i is a struct member
+        if split[i] not in type_table[prev]["fields"]:
+            raise Exception(f"Symbol `{split[i]}` is not a member of the struct `{prev}`")
 
+        # the cumulative offset is equal to the sum of all member sizes before the referenced nested struct
+        for j in type_table[prev]["fields"].keys():
+            if j != split[i]:
+                c_off += type_table[type_table[prev]["fields"][j]["type"]]["size"] # ok bro
+                continue
+            break
 
-# parses a symbolic reference and returns either an integer or a list of instructions if a register is involved
-def __sym_ref(op: str) -> Union[str, instruction]:
+        if i != len(split)-1:
+            # check if i is a struct type
+            if type_table[prev]["fields"][split[i]]["type"] in ("b", "w", "d"):
+                raise Exception(f"Referenced struct member `{split[i]}` is not a struct type")
+            
+            # prev = current
+            prev = type_table[prev]["fields"][split[i]]["type"]
+            continue
+
+        # i = len
+        if type_table[prev]["fields"][split[i]]["type"] not in ("b", "w", "d"):
+            # instruction operands after parsing can only be integers
+            raise Exception(f"Referenced value `{split[i]}` is a struct type while integer type is expected")
+        
+    return sym_table[split[0]]["addr"] + c_off
+
+# helper function for __sym_ref that resolves a symbol into an int
+def __rs_term(term: str) -> int:
+    n = 1
+    if term[0] == '-':
+        term = term[1:]
+        n = -1
+
+    try:
+        return __parse_int(term) * n
+    except ValueError:
+        pass
+
+    if len(term) == 3 and term[0] == '\'' and term[2] == '\'':
+        return ord(term[1]) * n
+
+    if "." in term:
+        return __parse_nsref(term) * n
+
+    if term in sym_table:
+        return sym_table[term]["addr"] * n
+
+    raise Exception(f"Failed to resolve symbol at line {crt_line}: {term}")
+
+def __sym_ref(op: str, is_op1: bool = False) -> Union[str, instruction]:
     ptr = False
 
     # convert subtraction to addition of the opposite number to simplify operand splitting
@@ -247,20 +314,6 @@ def __sym_ref(op: str) -> Union[str, instruction]:
         op = op[1:-1]
 
     split = op.split("+")
-
-    # convert characters to their ascii value
-    for i in range(len(split)):
-        split[i] = split[i].strip()
-
-        if split[i][0] == '\'' and split[i][2] == '\'':
-            split[i] = str(ord(split[i][1]))
-        
-        if len(split[i]) > 2:
-            if split[i][0] == '-':
-                if split[i][1] == '0' and split[i][2] == 'x':
-                    split[i] = str(int(split[i], 16))
-            elif split[i][0] == '0' and split[i][1] == 'x':
-                split[i] = str(int(split[i], 16))
 
     ret = list()
 
@@ -275,6 +328,9 @@ def __sym_ref(op: str) -> Union[str, instruction]:
     # assume the expression contains at most 1 register
 
     refs = __reg_refs(split) # [nrefs, {registers}]
+    if is_op1 and len(split) > 1 and refs[0] != 0:
+        raise Exception(f"Syntax error at line {crt_line}: symbolic expressions involving registers on the first operand are not allowed.")
+
     if refs[0] == 1:
         if len(split) == 1: # operand contains only a register
             if ptr:
@@ -290,7 +346,7 @@ def __sym_ref(op: str) -> Union[str, instruction]:
             reg_idx = register_list.index(list(refs[1])[0])
 
             ret.append([
-                PRE_INS, 0x03,              # mov
+                PRE_BASE, 0x03,             # mov
                 0x04, 0x00, 0x00, 0x00,     # r0
                 reg_idx, 0x00, 0x00, 0x00   # refs[1][0]
             ])
@@ -302,25 +358,24 @@ def __sym_ref(op: str) -> Union[str, instruction]:
             reg_idx = register_list.index(list(refs[1])[0])
 
             ret.append([
-                PRE_INS | PRE_INT, 0x03,    # mov
+                PRE_BASE | PRE_INT, 0x03,   # mov
                 0x04, 0x00, 0x00, 0x00,     # r0
                 0x00, 0x00, 0x00, 0x00      # 0
             ])
 
             ret.append([
-                PRE_INS, 0x16,              # sub
+                PRE_BASE, 0x16,             # sub
                 0x04, 0x00, 0x00, 0x00,     # r0
                 reg_idx, 0x00, 0x00, 0x00   # refs[1][0]
             ])
 
-        # 1 line that converts symbol references to their values and string integers to integers
-        s = sum([((__parse_int(x) if x[1:] not in sym_table else -sym_table[x[1:]]) if x not in sym_table else sym_table[x]) for x in split])
+        s = sum([__rs_term(x) for x in split])
 
         sh = (s >> 16) & 0xFFFF
         sl = s & 0xFFFF
 
         ret.append([
-            PRE_INS | PRE_INT, 0x02,    # add
+            PRE_BASE | PRE_INT, 0x02,   # add
             0x04, 0x00, 0x00, 0x00,     # r0
             (sh >> 8) & 0xFF,
             sh & 0xFF,
@@ -330,30 +385,9 @@ def __sym_ref(op: str) -> Union[str, instruction]:
 
         return ret
     elif refs[0] > 1:
-        print(f"Syntax error: `{op}`. Can't have more than 1 runtime variable in an operation between symbols")
-        sys.exit(0)
+        raise Exception(f"Syntax error at line {crt_line}: `{op}`. Can't have more than 1 runtime variable in an operation between symbols")
     else: # operand is a compile time constant
-        for i in range(len(split)):
-            try:
-                ret.append(__parse_int(split[i]))
-            except ValueError:
-                # if negative
-                if split[i][0] == "-":
-                    # pointers are always positive
-
-                    if split[i][1:] in sym_table:
-                        ret.append(-sym_table[split[i][1:]])
-                    else:
-                        print(f"{split[i][1:]} is not defined at line {crt_line}")
-                        sys.exit(0)
-                else:
-                    t = split[i]
-
-                    if t in sym_table:
-                        ret.append(sym_table[t])
-                    else:
-                        print(f"{t} is not defined at line {crt_line}")
-                        sys.exit(0)
+        ret = [__rs_term(x) for x in split]
 
         if ptr:
             return f"[{sum(ret)}]"
@@ -361,32 +395,131 @@ def __sym_ref(op: str) -> Union[str, instruction]:
         return str(sum(ret))
 
     return 0
-    
 
+
+# handles d[x] directives
+# d -> contains the entire instruction
+# 0 -> success, 1 -> incorrect use, 2 -> not d[x]
+def __handle_ddef(d: str, struct: str = "") -> Literal[0, 1, 2]:
+    s = d.split(maxsplit=1)
+
+    # .data must be defined before .code and d[x] cannot be used in .code
+    if SECT_CODE in sym_table:
+        return 1
+
+    directive: str = ""
+    data_operand: str = ""
+
+    # d[x] <data>
+    if len(s[0]) == 2 and s[0][0] == 'd' and s[0][1] in MEM_WIDTH_SUFFIXES:
+        directive = s[0][0] + s[0][1]
+        data_operand = s[1]
+    
+    # <symbol> d[x] <data>
+    elif len(s[1]) >= 2 and s[1][0] == 'd' and s[1][1] in MEM_WIDTH_SUFFIXES:
+        if s[0] in sym_table:
+            warning(f"Duplicate definition of symbol `{s[0]}` at line {crt_line}")
+        
+        directive = s[1][0] + s[1][1]
+        try:
+            data_operand = s[1].split(maxsplit=1)[1]
+        except IndexError:
+            if not struct:
+                print(f"No value passed to {directive} outside of a structure definition. (line {crt_line})")
+                return 1
+            elif directive == D_DS:
+                print(f"`ds` requires a defined struct as an argument. (line {crt_line})")
+                return 1
+            data_operand = ""
+
+        if not struct:
+            sym_table[s[0]] = {"addr": sym_table["$"], "type": ""}
+
+            if directive != D_DS:
+                sym_table[s[0]]["type"] = directive[1]
+            else:
+                if data_operand in MEM_WIDTH_SUFFIXES or data_operand not in type_table:
+                    print(f"Symbol `{data_operand}` is not defined.")
+                    return 1
+                sym_table[s[0]]["type"] = data_operand
+
+    else: return 2
+
+    if struct: # no initial value allowed (except ds)
+        if directive != D_DS:
+            if len(data_operand) != 0:
+                print(f"Cannot pass an initial value to {directive} inside a structure definition.")
+                return 1
+        
+            max_val = globals()[f"MAX_{directive[1]}"]
+            type_table[struct]["fields"][s[0]] = {"off": type_table[struct]["fields"]["$last_elm"], "type": directive[1]}
+            type_table[struct]["fields"]["$last_elm"] += int(log2(max_val + 1) / 8)
+            return 0
+
+        if data_operand in MEM_WIDTH_SUFFIXES or data_operand not in type_table:
+            print(f"Symbol `{data_operand}` is not defined.")
+            return 1
+        
+        # nested struct
+        type_table[struct]["fields"][s[0]] = {"off": type_table[struct]["fields"]["$last_elm"], "type": data_operand}
+        type_table[struct]["fields"]["$last_elm"] += type_table[data_operand]["size"]
+
+        return 0
+
+    if directive == D_DB and data_operand[0] == "\"" and data_operand[-1] == "\"":
+        st = data_operand[1:-1]
+        nbytes = len(st)
+
+        data_section.extend(bytearray(st, encoding="ascii"))
+    elif directive == D_DS:
+        nbytes = type_table[data_operand]["size"]
+        data_section.extend(bytearray(nbytes))
+    else:
+        arg = parse_int(data_operand)
+        max_val = globals()[f"MAX_{directive[1]}"]
+        nbytes = int(log2(max_val + 1) / 8)
+        
+        if arg > max_val:
+            warning(f"Operand exceeds integer limit at line {crt_line}")
+
+        data_section.extend(arg.to_bytes(nbytes, "big"))
+
+    sym_table["$"] += nbytes
+    return 0
+
+struct: str = ""
 def parse_instruction(ins: str) -> Union[instruction, Literal[0, -1, -2], List[instruction]]:
-    s0 = ins.split(sep="//") # remove comments
+    global struct
+
+    s0 = ins.split(sep="//", maxsplit=1) # remove comments
     s = s0[0].split(maxsplit=1) # split between instruction and operands
     if len(s) == 0:
         return 0 # no instruction
 
     opcode = s[0]
-
     if opcode not in instructions and opcode[:-1] not in instructions:
         # parse directives
-        if s[1].startswith(D_DEF):
-            # <symbol> def <addr>
-            split = s[1].split()
-            try:
-                addr = __parse_int(split[1])
-            except ValueError:
-                # addr must strictly be an integer
-                addr = int(__sym_ref(split[1])) # type: ignore
+        if struct and s[0] == D_ESTRUCT:
+            type_table[struct]["size"] = type_table[struct]["fields"]["$last_elm"]
+            del type_table[struct]["fields"]["$last_elm"]
 
-            if s[0] in sym_table:
-                print(f"Duplicate definition of symbol `{s[0]}` (line {crt_line})")
+            struct = ""
+            return 0
 
-            sym_table[s[0]] = addr
-            return 0 # directive executed
+        d = __handle_ddef(s0[0], struct)
+        if d == 0:
+            return 0
+        elif d == 1 or (d == 2 and struct):
+            return INVALID_OPCODE
+        
+        if s[0] == D_STRUCT:
+            if s[1] in type_table:
+                print(f"Attempted redefinition of struct `{s[1]}`")
+                sys.exit(0)
+            
+            struct = s[1]
+            type_table[s[1]] = {"fields": {"$last_elm": 0}}
+            return 0
         elif s[0] == D_SECT:
             if s[1] == ".data":
                 if SECT_CODE in sym_table: # .data must be placed first
@@ -401,48 +534,39 @@ def parse_instruction(ins: str) -> Union[instruction, Literal[0, -1, -2], List[i
                 print(f"Invalid section definition at line {crt_line}")
                 sys.exit(0)
 
-            return 0
-        elif s[0][0] == 'd': # might be a d[x] directive
-            if s[0][1] not in MEM_WIDTH_SUFFIXES or len(s) > 2:
-                return INVALID_OPCODE
-            
-            # d[x] instructions are exclusive to .data
-            if SECT_DATA in sym_table and SECT_CODE in sym_table:
-                return INVALID_OPCODE
+            return 0 # directive executed
+        else: # might be <symbol> d[x]/def <data>
+            if s[1].startswith(D_DEF):
+                # <symbol> def <addr>
+                split = s[1].split()
+                try:
+                    addr = __parse_int(split[1])
+                except ValueError:
+                    # addr must strictly be an integer
+                    addr = int(__sym_ref(split[1])) # type: ignore
 
-            # db "string"
-            if s[0][1] == 'b' and s[1][0] == "\"" and s[1][-1] == "\"":
-                st = s[1][1:-1]
-                nbytes = len(st)
+                if s[0] in sym_table:
+                    print(f"Duplicate definition of symbol `{s[0]}` (line {crt_line})")
 
-                data_section.extend(bytearray(st, encoding="utf-8"))
-            else:
-                arg = parse_int(s[1])
-                max_val = globals()[f"MAX_{s[0][1]}"]
-                nbytes = int(log2(max_val + 1) / 8)
-
-                if arg > max_val:
-                    warning(f"Operand exceeds integer limit (line {crt_line})")
-
-                # append arg into .data
-                data_section.extend(arg.to_bytes(nbytes, "big"))
-
-            sym_table["$"] += nbytes
-
-            return 0
+                sym_table[s[0]] = addr
+                return 0     
 
     try:
         operands = instructions[opcode]["operands"]
     except KeyError:
         operands = instructions[opcode[:-1]]["operands"]
 
-    # in 2 operand instruction can reference a symbol in the second operand
     if len(operands) == 2:
         try:
             split = s[1].split(sep=',') # split the opearnds
+            split[0] = split[0].strip()
             split[1] = split[1].strip()
 
             # handle symbol reference
+
+            # evaluation of the first operand cannot return instructions
+            split[0] = __sym_ref(split[0]) # type: ignore
+
             ref = __sym_ref(split[1])
             if type(ref) == list: # the second operand referenced a register (__sym_ref returned instructions)
                 if split[1][0] == '[' and split[1][-1] == ']':
@@ -493,7 +617,7 @@ def parse_instruction(ins: str) -> Union[instruction, Literal[0, -1, -2], List[i
 
 
 def parse_program(file: str) -> Union[List[instruction], Literal[0]]:
-    global entry_point, sym_table, crt_line
+    global entry_point, sym_table, crt_line, lines
 
     ret: List[instruction] = list()
     lines = open(file).read().splitlines()
@@ -531,7 +655,7 @@ def parse_program(file: str) -> Union[List[instruction], Literal[0]]:
                     print("Cannot define a function outside of .code")
                     sys.exit(0)
 
-                sym_table[lines[i][:-1]] = sym_table[SECT_CODE] + n * INSTRUCTION_SIZE
+                sym_table[lines[i][:-1]] = {"addr": sym_table[SECT_CODE] + n * INSTRUCTION_SIZE, "type": "d"}
             else:
                 print(f"Syntax error in {file}:{crt_line}: Invalid function name `{lines[i][:-1]}`")
                 sys.exit(0)
@@ -562,9 +686,30 @@ def parse_program(file: str) -> Union[List[instruction], Literal[0]]:
     return ret
 
 
+bios_functions = ("BIOS_print", "BIOS_sprint")
 if __name__ == "__main__":
+    bios = False
+    if len(sys.argv) == 4 and "-bios" == sys.argv[3]:
+        # if bios = True then the assembler will search for bios functions in the binary and save their addresses into a jump table
+        # which will be placed at the beginning of the .data section
+        bios = True
+
     start = time.time()
-    p = parse_program("programs/test")
+
+    p = parse_program(sys.argv[1])
+
+    if bios:
+        for i in sym_table:
+            if i in bios_functions:
+                idx = bios_functions.index(i)
+                try:
+                    data_section[4 * idx + 0] = (sym_table[i] >> 0x18) & 0xFF
+                    data_section[4 * idx + 1] = (sym_table[i] >> 0x10) & 0xFF
+                    data_section[4 * idx + 2] = (sym_table[i] >> 0x08) & 0xFF
+                    data_section[4 * idx + 3] = (sym_table[i] >> 0x00) & 0xFF
+                except IndexError:
+                    print("Not enough bytes allocated for the bios jump table.")
+                    sys.exit(0)
 
     p.insert(0, data_section) # type: ignore
     p.insert(0, int(sym_table[SECT_CODE]).to_bytes(4, "big")) # type: ignore
@@ -574,11 +719,11 @@ if __name__ == "__main__":
         sys.exit(0)
     else:
         # the first instruction in the program will be `jmp main`
-        jh = (sym_table["main"] >> 16) & 0xFFFF
-        jl = sym_table["main"] & 0xFFFF
+        jh = (sym_table["main"]["addr"] >> 16) & 0xFFFF
+        jl = sym_table["main"]["addr"] & 0xFFFF
 
         p.insert(0, [ # type: ignore
-            PRE_INS | (PRE_INT << 2),   # op1 = int
+            PRE_BASE | (PRE_INT << 2),  # op1 = int
             0x11,                       # jmp
             (jh >> 8) & 0xFF,   
             jh & 0xFF,
@@ -590,8 +735,7 @@ if __name__ == "__main__":
     delta = time.time() - start
     print(f"Assembly completed in {round(delta * 1000, 4)}ms")
 
-
-    f = open("programs/bin/test.bin", "wb")
+    f = open(sys.argv[2], "wb")
 
     for i in range(len(p)): # type: ignore
         f.write(bytearray(p[i])) # type: ignore
