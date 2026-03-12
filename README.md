@@ -1,10 +1,10 @@
 # casm
 A hardware program that works on a homemade instruction set
 
-## Documentation
-### 0. Definitions
+# Documentation
+## 0. Definitions
 
-#### 0a. General architecture
+### 0a. General architecture
 + All general purpose registers, and special registers (except `flags`) are 32 bits wide.
 + **Fixed instruction length**: All instructions are 10 bytes long.
 + **Paging**: Paging is always enabled. Page size is fixed to 4 KiB.
@@ -12,14 +12,14 @@ A hardware program that works on a homemade instruction set
 + On `INT n`, if current_IOPL > required_caller_IOPL, a privilege exception is raised before state modification.
 + The virtual address of the page table across all address spaces is the same.
 
-#### 0b. Notation
+### 0b. Notation
 + `op1, op2`: Operands of an instruction
 + `[addr]`: Memory dereference
 + `addr+10`: Symbolic reference (strictly in bytes)
 + `instruction[x]`: Any width variant
 + In this document a semicolon is used to denote a comment inside a code block, in to-be-assembled code `//` must be used instead.
 
-#### 0c. Data types
+### 0c. Data types
 | Type | Width | Range |
 | --- | --- | --- |
 | byte | 8 bit | 0-255 |
@@ -30,17 +30,17 @@ A hardware program that works on a homemade instruction set
 + Instructions without an explicit width that attempt memory dereference cause an invalid opcode exception.
 + If an operand exceeds the maximum value of its data type, it will be replaced by that maximum value
 
-#### 0d. Endianness
+### 0d. Endianness
 + **Memory**: big endian
 + **Instruction operands**: big endian (see section `2f` for exact byte layout)
 + **Registers**: endian neutral
 + In this document `bit 0` refers to the least significant bit.
 
-#### 0e. Stack
+### 0e. Stack
 + Grows downwards (stack pointer is decremented on push)
 + All of the following operations: `push`, `pop`, `call`, `ret` are dword by default 
 
-### 1. Registers
+## 1. Registers
 The available registers are:
 + `a, b, c, d`, which are the standard 32-bit registers and are all modifiable using the `mov` instructions
 + `r0`, a special register, the use of which will be explained in section `2c`
@@ -61,7 +61,7 @@ The following table contains the number corresponding to each register that is m
 
 + `ip` and `flags` are not directly accessible via `mov`.
 
-#### 1a. The `flags` register
+### 1a. The `flags` register
 ```
  15          6      3                0
 +----------+------+----+----+----+----+
@@ -77,19 +77,19 @@ The following table contains the number corresponding to each register that is m
 | IF | 1 | Interrupt flag; if set, interrupts are enabled. Can be toggled using `cli` and `sti` |
 | IOPL | 3 | Current I/O privilege level, readonly for `iopl > 0x00` |
 
-#### 1b. Processor state on kernel entry
+### 1b. Processor state on kernel entry
 + `flags` = `0x0010` (iopl = 1)
 + `ip` = `0x00010000`
 + `sp` = `0x00FFFFFF`
 + `pta` = `0x00081000`
 + `a,b,c,d` = `0x00000000`
 
-### 2. Assembler
+## 2. Assembler
 + The assembler parses the code line by line
 + If a symbolic reference is found, i.e. a function (`func`), an operation between symbols and registers (`func+a+10`), the assembler will call `__sym_ref()`
 + `__sym_ref()` will simplify the symbolic reference by replacing the value corresponding to the symbol or by splitting the operation into multiple instructions if a register is involved<br>
 
-#### 2a. Directives
+### 2a. Directives
 Directives are pseudo-instructions that are executed by the assembler during compile time. The following directives are currently implemented:
 
 + `entry <addr>`: Sets the program entry point, defaulting to `0x00010000`. Can be only placed on the first line of the program.
@@ -100,7 +100,7 @@ Directives are pseudo-instructions that are executed by the assembler during com
 + `struct <name>`: Defines a struct (section `2d`)
 + `end_struct`: Ends the definition of the struct.
 
-#### 2b. Predefined symbols
+### 2b. Predefined symbols
 | Symbol | Description |
 | --- | --- |
 | `$` | Address index pointer, i.e. points to the current instruction or index in `.data` |
@@ -128,7 +128,7 @@ However, the following problem arises: If a symbol is defined at the end of `.da
 ```
 This issue will be later addressed using page permissions which will throw a page fault on these incorrect use cases.
 
-#### 2c. Symbolic reference parsing
+### 2c. Symbolic reference parsing
 ```asm
 func:
     does something
@@ -150,7 +150,7 @@ where `r0` is a special register that is used in this kind of operations. It can
 + Symbolic expressions that also contain registers on the first operand are illegal.
 + Each external symbol has a data type. The default type identifiers are identical to the memory width suffixes.
 
-#### 2d. Structs
+### 2d. Structs
 A struct is a custom data type that can be defined in `.data` in the following way:
 ```asm
 section .data
@@ -185,7 +185,7 @@ movs [st], [0xFFFFF] ; read struct from memory
 movs [0xFFFFF], [st] ; write struct to memory
 ```
 
-#### 2e. Stages of the assembly
+### 2e. Stages of the assembly
 Suppose we have the following program (which is unnecessarily *complicated* for the sake of explaining the inner workings of the assembler):
 
 ```asm
@@ -229,7 +229,7 @@ jmp r0
 This snippet, although it's assembly, it isn't easily readable since the symbols have been replaced with their corresponding addresses and inline operations have been expanded into multiple instructions. This *first stage* of the assembly is internal and not outputted by the assembler, however, these instructions are ready to be directly converted into machine code, which is the second (and final) stage of the assembly.
 
 
-#### 2f. Machine code
+### 2f. Machine code
 Using the following table I will explain how the machine code is generated by splitting an instruction into 3 parts:
 
 1. The instruction prefix
@@ -286,8 +286,8 @@ The prefix itself, consists of 3 sections (does **not** apply for `movs`, see se
 Notice how the instruction at address `0x1000` which is `jmp <main+0>` (or `jmp 0x1050` if you like) doesn't exist in the initial program. This is used to simplify the assembly process. The instruction `entry 0x1000` doesn't *really* set the entry point (beginning of `main`) to `0x1000`, instead, it tells the assembler that the entire program will be placed at that address. Since the code is parsed line by line, it means that if the main function is first, it can't make any symbol references, as almost all other symbols will be defined after the main function. Therefore, once the assembly is completed, the assembler finds the address of the first instruction of `main` and places a jump instruction to that address at the top of the program.
 <br>
 
-### 3. Instructions
-#### 3a. Normal instructions
+## 3. Instructions
+### 3a. Normal instructions
 | Opcode | Mnemonic | Description |
 | --- | --- | --- |
 | 0x00 | NOP | No instruction |
@@ -322,7 +322,7 @@ Notice how the instruction at address `0x1000` which is `jmp <main+0>` (or `jmp 
 
 Note: Any instruction involving memory operations must encode width specifically (i.e. `mov` doesn't allow memory operations, `movd` does)
 
-#### 3b. Special instructions
+### 3b. Special instructions
 | Opcode | Mnemonic | Description |
 | --- | --- | --- |
 | 0xFD | MDUMP | Prints the specified number of bytes at the specified address into the terminal |
@@ -337,15 +337,15 @@ movs [int], [int] ; registers are not allowed
 Consequently, the standard prefix is redundant. However, in order to address the problem caused by variable memory width the prefix will be repurposed and for `movs` **only**, the prefix will contain the struct size, therefore, the maximum struct size is 255 bytes.
 <br>
 
-### 4. Interrupts
-#### 4a. Interrupt descriptor table
+## 4. Interrupts
+### 4a. Interrupt descriptor table
 An interrupt descriptor table can be loaded using the instruction `lidt <addr>`.
 <br>
 
 The structure of the interrupt descriptor table is simple, each entry has 1 element which is the address of the *n*th interrupt handler.
 <br>
 
-#### 4b. Interrupt handling
+### 4b. Interrupt handling
 If `int n` is executed and the value of the *n*th entry in the IDT is nonzero then, `ip` will be set to `idt[n]`, after pushing the current `ip` to the stack. However, if `idt[n]` is zero, the interrupt handler will recurse to itself indefinitely, marking an unhandled interrupt. Exectuting `int 0x80` will call a BIOS function. 
 <br>
 
@@ -363,7 +363,7 @@ main:
 ```
 <br>
 
-#### 4c. Interrupts/Exceptions
+### 4c. Interrupts/Exceptions
 | `INT n` | Type | Description | 
 | --- | --- | --- |
 | 0x00 | E | Division by zero |
@@ -376,8 +376,8 @@ main:
 | 0x80 | I | BIOS interrupt |
 <br>
 
-### 5. Memory
-#### 5a. Paging
+## 5. Memory
+### 5a. Paging
 Paging is architecturally enabled at reset with an identity mapping of the first 16 MB. The initial page table is modifiable and replacable by the BIOS and the kernel, it is not a permanent structure and therefore should be discarded by the kernel. A permanent and expanded PT must be installed by the kernel using the standard mappings (not yet implemented). Page with index `0` (`VA = 0x00000000`) should not be mapped as it can be used for null pointer exceptions, and the pages of the region where the BIOS code and the PT (bootstrap PT) live would be unpageable, meaning they are inacessible by privilege levels lower than the kernel and they can never be evicted.
 <br>
 
@@ -407,7 +407,7 @@ Page permissions:
 
 Note: Here X does not imply R, architecturally it does since its the same operation, but a page with X and not R cannot be read from the kernel using the `mov` instructions
 
-#### 5b. Initial memory structure
+### 5b. Initial memory structure
 This memory structure is temporary and is set up by the CPU after reset. It is standard practice that the kernel copies these mappings into the expanded page table and leave them as is.
 <br>
 | Start VA | Page index | Size | Permissions | Description |
@@ -423,14 +423,14 @@ This memory structure is temporary and is set up by the CPU after reset. It is s
 | `0x00FA0000` | 4000-4096 | 384 KiB | RW | Stack |
 <br>
 
-### 6. I/O Ports
+## 6. I/O Ports
 The processor communicates with external hardware devices using the `in` and `out` instructions (i.e. `inb`, `outb`)
 
 | Port | Device | Description |
 | --- | --- | --- |
 | `0x00` | System timer | Provides high resolution timing and interrupt generation |
 
-#### 6a. System timer commands
+### 6a. System timer commands
 - **0x0000 (READ_CLK):** Returns the current 32-bit cycle counter.
 - **0x0001 (TOGGLE):** Enables/Disables the counter.
 - **0x0002 (INT_CNT):** Returns the number of timer interrupts triggered since reset.
