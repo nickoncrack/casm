@@ -93,35 +93,37 @@ def __val_2op(ins: str, operands: list) -> Union[instruction, Literal[-1, -2, -3
     operand_types: list[str] = ["", ""]
 
     try:
-        if ins != "movs":
+        if ins == "movs":
+            if type(operands[0]) != list and type(operands[1]) != list:
+                return INVALID_COMB
+            
+            # at least one of the operands contains a list
+            if type(operands[0]) != list and type(operands[1]) != list:
+                return INVALID_COMB
+        else:
             ret[0] = PRE_BASE
             operand_types = instructions[ins]["operands"]
-        else:
-            # at least one of the operands contains a tuple
-            if type(operands[0]) != list and type(operands[1]) != list:
-                print(1)
-                return INVALID_COMB
-
-            for i in range(2):
-                if type(operands[i]) == list:
-                    operand_types[i] = operands[i][1]
-                    if operands[i][2]: # if ptr
-                        operands[i] = f"[{operands[i][0]}]"
-                    else:
-                        operands[i] = str(operands[i][0])
+            
+        for i in range(2):
+            if type(operands[i]) == list:
+                operand_types[i] = operands[i][1]
+                if operands[i][2]: # if ptr
+                    operands[i] = f"[{operands[i][0]}]"
                 else:
+                    operands[i] = str(operands[i][0])
+            else:
+                if ins == "movs":
                     operand_types[i] = "int"
 
+        if ins == "movs":
             # if both operands are a struct they need to have the same size
             if "int" not in operand_types:
                 if type_table[operand_types[0]]["size"] != type_table[operand_types[1]]["size"]: # type: ignore
-                    print(1)
                     return INVALID_COMB
     except KeyError: # base instruction
         if not instructions[ins[:-1]]["variableMemoryWidth"] or ins[-1] not in MEM_WIDTH_SUFFIXES:
-            print(1)
             return INVALID_OPCODE
-            
+      
         # +5 since the operands occupy 4 bits and the base instruction bit 1
         ret[0] = 1 << (MEM_WIDTH_SUFFIXES.index(ins[-1]) + 5)
         ins = ins[:-1]
@@ -150,7 +152,6 @@ def __val_2op(ins: str, operands: list) -> Union[instruction, Literal[-1, -2, -3
             # operand is a pointer
             if operands[i][0] == '[' and operands[i][len(operands[i])-1] == ']':
                 if ret[0] == PRE_BASE: # base instructions do not allow pointer dereferences
-                    print(1)
                     return INVALID_COMB
 
                 ret[0] |= PRE_PTR << rshift # a << 0 = a
@@ -300,18 +301,8 @@ def __parse_nsref(op: str) -> list: # (address, type)
             break
 
         if i != len(split)-1:
-            # check if i is a struct type
-            # if type_table[prev]["fields"][split[i]]["type"] in MEM_WIDTH_SUFFIXES:
-            #     raise Exception(f"Referenced struct member `{split[i]}` is not a struct type")
-            
-            # prev = current
             prev = type_table[prev]["fields"][split[i]]["type"]
             continue
-
-        # i = len
-        # if type_table[prev]["fields"][split[i]]["type"] not in MEM_WIDTH_SUFFIXES:
-        #     # instruction operands after parsing can only be integers
-        #     raise Exception(f"Referenced value `{split[i]}` is a struct type while integer type is expected")
         
     return [sym_table[split[0]]["addr"] + c_off, type_table[prev]["fields"][split[i]]["type"]]
 
@@ -335,7 +326,7 @@ def __rs_term(term: str) -> list: # [address, type]
         return [ref[0] * n, ref[1]]
 
     if term in sym_table:
-        return [sym_table[term]["addr"] * n, "d"]
+        return [sym_table[term]["addr"] * n, sym_table[term]["type"]]
 
     raise Exception(f"Failed to resolve symbol at line {crt_line}: `{term}`")
 
@@ -486,7 +477,7 @@ def __handle_ddef(d: str, struct: str = "") -> Literal[0, 1, 2]:
             data_operand = ""
 
         if not struct:
-            sym_table[s[0]] = sym_table["$"]
+            sym_table[s[0]] = sym_table["$"].copy()
 
             if directive != D_DS:
                 sym_table[s[0]]["type"] = directive[1]
@@ -605,8 +596,8 @@ def parse_instruction(ins: str) -> Union[instruction, Literal[0, -1, -2], List[i
                 return 0     
 
     # # instructions can be only placed in .code
-    if SECT_CODE not in sym_table:
-        return INVALID_OPCODE
+    # if SECT_CODE not in sym_table:
+    #     return INVALID_OPCODE
 
     try:
         operands = instructions[opcode]["operands"]
