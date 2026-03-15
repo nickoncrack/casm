@@ -99,6 +99,7 @@ def __val_2op(ins: str, operands: list) -> Union[instruction, Literal[-1, -2, -3
         else:
             # at least one of the operands contains a tuple
             if type(operands[0]) != list and type(operands[1]) != list:
+                print(1)
                 return INVALID_COMB
 
             for i in range(2):
@@ -114,9 +115,11 @@ def __val_2op(ins: str, operands: list) -> Union[instruction, Literal[-1, -2, -3
             # if both operands are a struct they need to have the same size
             if "int" not in operand_types:
                 if type_table[operand_types[0]]["size"] != type_table[operand_types[1]]["size"]: # type: ignore
+                    print(1)
                     return INVALID_COMB
     except KeyError: # base instruction
         if not instructions[ins[:-1]]["variableMemoryWidth"] or ins[-1] not in MEM_WIDTH_SUFFIXES:
+            print(1)
             return INVALID_OPCODE
             
         # +5 since the operands occupy 4 bits and the base instruction bit 1
@@ -134,7 +137,7 @@ def __val_2op(ins: str, operands: list) -> Union[instruction, Literal[-1, -2, -3
         # operand 2 index in ret (i = 1): n + 4 = n + 4i
 
         if operands[i] in register_list:
-            if operand_types[i] != "int":
+            if operand_types[i] not in ("reg", "any"):
                 return INVALID_COMB
             
             ret[2 + 4*i] = register_list.index(operands[i])
@@ -259,6 +262,8 @@ def __reg_refs(op: list) -> List: # [nrefs, regs]
     ret = [0, set()]
 
     for i in op:
+        i = i.strip()
+
         if i[0] == '[' and i[-1] == ']':
             t = i[1:-1]
         else:
@@ -332,7 +337,7 @@ def __rs_term(term: str) -> list: # [address, type]
     if term in sym_table:
         return [sym_table[term]["addr"] * n, "d"]
 
-    raise Exception(f"Failed to resolve symbol at line {crt_line}: {term}")
+    raise Exception(f"Failed to resolve symbol at line {crt_line}: `{term}`")
 
 def __sym_ref(op: str, is_op1: bool = False) -> Union[str, instruction, list]:
     ptr = False
@@ -344,6 +349,9 @@ def __sym_ref(op: str, is_op1: bool = False) -> Union[str, instruction, list]:
         op = op[1:-1]
 
     split = op.split("+")
+
+    for i in range(len(split)):
+        split[i] = split[i].strip()
 
     ret = list()
 
@@ -380,7 +388,7 @@ def __sym_ref(op: str, is_op1: bool = False) -> Union[str, instruction, list]:
                 0x04, 0x00, 0x00, 0x00,     # r0
                 reg_idx, 0x00, 0x00, 0x00   # refs[1][0]
             ])
-        except ValueError:
+        except ValueError as e:
             # negative value exists in operand split
             i = split.index(f"-{list(refs[1])[0]}")
             split.pop(i)
@@ -478,7 +486,7 @@ def __handle_ddef(d: str, struct: str = "") -> Literal[0, 1, 2]:
             data_operand = ""
 
         if not struct:
-            sym_table[s[0]] = {"addr": sym_table["$"], "type": ""}
+            sym_table[s[0]] = sym_table["$"]
 
             if directive != D_DS:
                 sym_table[s[0]]["type"] = directive[1]
@@ -529,7 +537,7 @@ def __handle_ddef(d: str, struct: str = "") -> Literal[0, 1, 2]:
 
         data_section.extend(arg.to_bytes(nbytes, "big"))
 
-    sym_table["$"] += nbytes
+    sym_table["$"]["addr"] += nbytes
     return 0
 
 struct: str = ""
@@ -574,7 +582,7 @@ def parse_instruction(ins: str) -> Union[instruction, Literal[0, -1, -2], List[i
                 # &(.data) = org + jmp <main> (10)
                 sym_table[SECT_DATA] = entry_point + 0x0A
             elif s[1] == ".code":
-                sym_table[SECT_CODE] = sym_table["$"]
+                sym_table[SECT_CODE] = sym_table["$"]["addr"]
             else:
                 print(f"Invalid section definition at line {crt_line}")
                 sys.exit(0)
@@ -593,10 +601,10 @@ def parse_instruction(ins: str) -> Union[instruction, Literal[0, -1, -2], List[i
                 if s[0] in sym_table:
                     print(f"Duplicate definition of symbol `{s[0]}` (line {crt_line})")
 
-                sym_table[s[0]] = addr
+                sym_table[s[0]] = {"addr": addr, "type": "d"}
                 return 0     
 
-    # instructions can be only placed in .code
+    # # instructions can be only placed in .code
     if SECT_CODE not in sym_table:
         return INVALID_OPCODE
 
@@ -623,7 +631,7 @@ def parse_instruction(ins: str) -> Union[instruction, Literal[0, -1, -2], List[i
                 else:
                     split[1] = "r0"
                 ref.append(__val_2op(opcode, split)) # type: ignore
-                
+
                 return ref
             else:
                 split[1] = ref # type: ignore
@@ -683,7 +691,7 @@ def parse_program(file: str) -> Union[List[instruction], Literal[0]]:
     else:
         print(f"No entry directive found. Defaulting to {hex(entry_point)}.")
 
-    sym_table["$"] = entry_point + 0x0A + 0x04 # current byte pointer
+    sym_table["$"] = {"addr": entry_point + 0x0A + 0x04, "type": "d"} # current byte pointer
 
     # code section parsing
     n = 0 # nth instruction
@@ -723,12 +731,12 @@ def parse_program(file: str) -> Union[List[instruction], Literal[0]]:
             if type(ins[0]) == int: # instruction parse returned single instruction
                 ret.append(ins) # type: ignore
                 n += 1
-                sym_table["$"] += INSTRUCTION_SIZE
+                sym_table["$"]["addr"] += INSTRUCTION_SIZE
             else: # returned multiple instructions
-                for i in ins:
-                    ret.append(i) # type: ignore
+                for j in ins:
+                    ret.append(j) # type: ignore
                     n += 1 # instruction count
-                    sym_table["$"] += INSTRUCTION_SIZE
+                    sym_table["$"]["addr"] += INSTRUCTION_SIZE
                 
         crt_line += 1
 
@@ -752,10 +760,10 @@ if __name__ == "__main__":
             if i in bios_functions:
                 idx = bios_functions.index(i)
                 try:
-                    data_section[4 * idx + 0] = (sym_table[i] >> 0x18) & 0xFF
-                    data_section[4 * idx + 1] = (sym_table[i] >> 0x10) & 0xFF
-                    data_section[4 * idx + 2] = (sym_table[i] >> 0x08) & 0xFF
-                    data_section[4 * idx + 3] = (sym_table[i] >> 0x00) & 0xFF
+                    data_section[4 * idx + 0] = (sym_table[i]["addr"] >> 0x18) & 0xFF
+                    data_section[4 * idx + 1] = (sym_table[i]["addr"] >> 0x10) & 0xFF
+                    data_section[4 * idx + 2] = (sym_table[i]["addr"] >> 0x08) & 0xFF
+                    data_section[4 * idx + 3] = (sym_table[i]["addr"] >> 0x00) & 0xFF
                 except IndexError:
                     print("Not enough bytes allocated for the bios jump table.")
                     sys.exit(0)
@@ -782,7 +790,6 @@ if __name__ == "__main__":
         ])
 
     delta = time.time() - start
-    print(type_table)
     print(f"Assembly completed in {round(delta * 1000, 4)}ms")
 
     f = open(sys.argv[2], "wb")
