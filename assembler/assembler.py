@@ -28,7 +28,7 @@ PRE_REG = 0b00 # operand is a register
 PRE_INT = 0b01 # operand is an immediate integer
 PRE_PTR = 0b10 # operand is a pointer
 
-MEM_WIDTH_SUFFIXES = ("b", "w", "d", "s")
+MEM_WIDTH_SUFFIXES = ("b", "w", "d")
 
 ## errors
 INVALID_OPCODE = -1
@@ -64,6 +64,7 @@ type_table: dict[str, dict] = {
 data_section = bytearray()
 entry_point: int = 0x00010000
 
+
 # parse hex or decimal string to int
 # internal function where we want the caller to handle the ValueError
 def __parse_int(i: str) -> int:
@@ -84,14 +85,37 @@ def parse_int(i: str) -> int:
         print(f"Failed to parse integer in line {crt_line}: {i}")
         sys.exit(0)
 
-def __val_2op(ins: str, operands: List[str]) -> Union[instruction, Literal[-1, -2, -3]]:
+def __val_2op(ins: str, operands: list) -> Union[instruction, Literal[-1, -2, -3]]:
     if len(operands) != 2:
         return INVALID_COMB
 
     ret: instruction = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-    operand_types = list()
+    operand_types: list[str] = ["", ""]
 
-    try: # we can do this since the opcode is already validated
+    try:
+        if ins != "movs":
+            ret[0] = PRE_BASE
+            operand_types = instructions[ins]["operands"]
+        else:
+            # at least one of the operands contains a tuple
+            if type(operands[0]) != list and type(operands[1]) != list:
+                return INVALID_COMB
+
+            for i in range(2):
+                if type(operands[i]) == list:
+                    operand_types[i] = operands[i][1]
+                    if operands[i][2]: # if ptr
+                        operands[i] = f"[{operands[i][0]}]"
+                    else:
+                        operands[i] = str(operands[i][0])
+                else:
+                    operand_types[i] = "int"
+
+            # if both operands are a struct they need to have the same size
+            if "int" not in operand_types:
+                if type_table[operand_types[0]]["size"] != type_table[operand_types[1]]["size"]: # type: ignore
+                    return INVALID_COMB
+    except KeyError: # base instruction
         if not instructions[ins[:-1]]["variableMemoryWidth"] or ins[-1] not in MEM_WIDTH_SUFFIXES:
             return INVALID_OPCODE
             
@@ -101,9 +125,6 @@ def __val_2op(ins: str, operands: List[str]) -> Union[instruction, Literal[-1, -
 
         # an instruction with memory suffix accepts all operand types
         operand_types = ["any", "any"]
-    except KeyError: # base instruction
-        ret[0] = PRE_BASE
-        operand_types = instructions[ins]["operands"]
 
     # if an instruction has an 'int' operand, any type of pointer dereference is allowed
     ret[1] = instructions[ins]["op"]
@@ -113,7 +134,7 @@ def __val_2op(ins: str, operands: List[str]) -> Union[instruction, Literal[-1, -
         # operand 2 index in ret (i = 1): n + 4 = n + 4i
 
         if operands[i] in register_list:
-            if operand_types[i] == "int":
+            if operand_types[i] != "int":
                 return INVALID_COMB
             
             ret[2 + 4*i] = register_list.index(operands[i])
@@ -126,6 +147,7 @@ def __val_2op(ins: str, operands: List[str]) -> Union[instruction, Literal[-1, -
             # operand is a pointer
             if operands[i][0] == '[' and operands[i][len(operands[i])-1] == ']':
                 if ret[0] == PRE_BASE: # base instructions do not allow pointer dereferences
+                    print(1)
                     return INVALID_COMB
 
                 ret[0] |= PRE_PTR << rshift # a << 0 = a
@@ -149,7 +171,7 @@ def __val_2op(ins: str, operands: List[str]) -> Union[instruction, Literal[-1, -
                 ret[3 + 4*i] = op1h & 0xFF        # byte 1
                 ret[4 + 4*i] = (op1l >> 8) & 0xFF # byte 2
                 ret[5 + 4*i] = op1l & 0xFF        # byte 3
-            except ValueError as e:
+            except ValueError:
                 # check if operand is a register (i.e. movb a, [b])
                 if operands[i] in register_list: # operand is already stripped
                     ret[2 + 4*i] = register_list.index(operands[i])
@@ -159,10 +181,19 @@ def __val_2op(ins: str, operands: List[str]) -> Union[instruction, Literal[-1, -
     # if the instruction contains memory operations, the first operand cannot contain an immediate integer
     if ret[0] & 0b1110_01_00 == ret[0]:
         return INVALID_COMB
+
+    if ins == "movs":
+        if ret[0] != 0b0000_11_11:
+            return INVALID_COMB
+
+        t = list(filter(lambda x: x != "int", operand_types))[0]
+        ret[0] = type_table[t]["size"] # type: ignore
+        if ret[0] > 255:
+            warning("Referenced struct size exceeds 255 bytes.")
+            ret[0] = 255
          
     return ret
     
-
 def __val_1op(ins: str, operand: str) -> Union[instruction, Literal[-1, -2]]:
     ret: instruction = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 
@@ -243,10 +274,10 @@ def __reg_refs(op: list) -> List: # [nrefs, regs]
     return ret
 
 # parse (nested) struct references
-def __parse_nsref(op: str) -> int:
+def __parse_nsref(op: str) -> list: # (address, type)
     split = op.split(".")
 
-    if split[0] not in sym_table or sym_table[split[0]]["type"] in ("b", "w", "d"):
+    if split[0] not in sym_table or sym_table[split[0]]["type"] in MEM_WIDTH_SUFFIXES:
         raise Exception(f"Symbol `{split[0]}` is not a struct")
 
     c_off = 0 # cumulative offset
@@ -265,44 +296,45 @@ def __parse_nsref(op: str) -> int:
 
         if i != len(split)-1:
             # check if i is a struct type
-            if type_table[prev]["fields"][split[i]]["type"] in ("b", "w", "d"):
-                raise Exception(f"Referenced struct member `{split[i]}` is not a struct type")
+            # if type_table[prev]["fields"][split[i]]["type"] in MEM_WIDTH_SUFFIXES:
+            #     raise Exception(f"Referenced struct member `{split[i]}` is not a struct type")
             
             # prev = current
             prev = type_table[prev]["fields"][split[i]]["type"]
             continue
 
         # i = len
-        if type_table[prev]["fields"][split[i]]["type"] not in ("b", "w", "d"):
-            # instruction operands after parsing can only be integers
-            raise Exception(f"Referenced value `{split[i]}` is a struct type while integer type is expected")
+        # if type_table[prev]["fields"][split[i]]["type"] not in MEM_WIDTH_SUFFIXES:
+        #     # instruction operands after parsing can only be integers
+        #     raise Exception(f"Referenced value `{split[i]}` is a struct type while integer type is expected")
         
-    return sym_table[split[0]]["addr"] + c_off
+    return [sym_table[split[0]]["addr"] + c_off, type_table[prev]["fields"][split[i]]["type"]]
 
 # helper function for __sym_ref that resolves a symbol into an int
-def __rs_term(term: str) -> int:
+def __rs_term(term: str) -> list: # [address, type]
     n = 1
     if term[0] == '-':
         term = term[1:]
         n = -1
 
     try:
-        return __parse_int(term) * n
+        return [__parse_int(term) * n, "d"]
     except ValueError:
         pass
 
     if len(term) == 3 and term[0] == '\'' and term[2] == '\'':
-        return ord(term[1]) * n
+        return [ord(term[1]) * n, "d"]
 
     if "." in term:
-        return __parse_nsref(term) * n
+        ref = __parse_nsref(term)
+        return [ref[0] * n, ref[1]]
 
     if term in sym_table:
-        return sym_table[term]["addr"] * n
+        return [sym_table[term]["addr"] * n, "d"]
 
     raise Exception(f"Failed to resolve symbol at line {crt_line}: {term}")
 
-def __sym_ref(op: str, is_op1: bool = False) -> Union[str, instruction]:
+def __sym_ref(op: str, is_op1: bool = False) -> Union[str, instruction, list]:
     ptr = False
 
     # convert subtraction to addition of the opposite number to simplify operand splitting
@@ -367,7 +399,14 @@ def __sym_ref(op: str, is_op1: bool = False) -> Union[str, instruction]:
                 reg_idx, 0x00, 0x00, 0x00   # refs[1][0]
             ])
 
-        s = sum([__rs_term(x) for x in split])
+        s = 0
+        for x in split:
+            r = __rs_term(x)
+            if r[1] in MEM_WIDTH_SUFFIXES:
+                s += r[0]
+                continue
+            
+            raise Exception(f"Error at line {crt_line}: expected integer, got `{r[1]}` instead.")
 
         sh = (s >> 16) & 0xFFFF
         sl = s & 0xFFFF
@@ -385,14 +424,22 @@ def __sym_ref(op: str, is_op1: bool = False) -> Union[str, instruction]:
     elif refs[0] > 1:
         raise Exception(f"Syntax error at line {crt_line}: `{op}`. Can't have more than 1 runtime variable in an operation between symbols")
     else: # operand is a compile time constant
-        ret = [__rs_term(x) for x in split]
+        ret = list()
+        for x in split:
+            r = __rs_term(x)
+            if r[1] not in MEM_WIDTH_SUFFIXES and len(split) == 1:
+                r.append(ptr) # (address, type, ptr)
+                return r
+            elif r[1] in MEM_WIDTH_SUFFIXES:
+                ret.append(r[0])
+                continue
+
+            raise Exception(f"Error at line {crt_line}: expected integer, got `{r[1]}` instead.")
 
         if ptr:
             return f"[{sum(ret)}]"
         
         return str(sum(ret))
-
-    return 0
 
 
 # handles d[x] directives
@@ -414,7 +461,7 @@ def __handle_ddef(d: str, struct: str = "") -> Literal[0, 1, 2]:
         data_operand = s[1]
     
     # <symbol> d[x] <data>
-    elif len(s[1]) >= 2 and s[1][0] == 'd' and s[1][1] in MEM_WIDTH_SUFFIXES:
+    elif len(s[1]) >= 2 and s[1][0] == 'd' and s[1][1] in ("b", "w", "d", "s"):
         if s[0] in sym_table:
             warning(f"Duplicate definition of symbol `{s[0]}` at line {crt_line}")
         
@@ -548,6 +595,10 @@ def parse_instruction(ins: str) -> Union[instruction, Literal[0, -1, -2], List[i
 
                 sym_table[s[0]] = addr
                 return 0     
+
+    # instructions can be only placed in .code
+    if SECT_CODE not in sym_table:
+        return INVALID_OPCODE
 
     try:
         operands = instructions[opcode]["operands"]
@@ -731,6 +782,7 @@ if __name__ == "__main__":
         ])
 
     delta = time.time() - start
+    print(type_table)
     print(f"Assembly completed in {round(delta * 1000, 4)}ms")
 
     f = open(sys.argv[2], "wb")
