@@ -410,18 +410,16 @@ Note: Here X does not imply R, architecturally it does since its the same operat
 ### 5b. Initial memory structure
 This memory structure is temporary and is set up by the CPU after reset. It is standard practice that the kernel copies these mappings into the expanded page table and leave them as is.
 <br>
-| Start VA | Page index | Size | Permissions | Description |
-| --- | --- | --- | --- | --- |
-| `0x00000000` | 0 | 4 KiB | - | Unmapped page for detecting null pointer dereferences |
-| `0x00001000` | 1-128 | 512 KiB | RX | BIOS region (does not contain only the binary) |
-| `0x00081000` | 129-134 | 20 KiB | RW | Initial page table |
-| `0x00087000` | 135-2048 | ~7.47 MiB | X | Kernel binary |
-| `0x00801000` | 2049-3969 | 7.5 MiB | RWX | Reserved kernel memory |
-| `0x00F82000` | 3970-3972 | 8 KiB | W | Text video buffer |
-| `0x00F85000` | 3973 | 4 KiB | RWX | Interrupt descriptor table |
-| `0x00F86000` | 3974-3999 | 100 KiB | RWX | Reserved |
-| `0x00FA0000` | 4000-4096 | 384 KiB | RW | Stack |
-<br>
+
+| Start VA | Size | Permissions | Description |
+| --- | --- | --- | --- |
+| `0x00000000` | 4 KiB | - | Unmapped page for detecting null pointer dereferences |
+| `0x00001000` | 128 KiB | RWX | BIOS region |
+| `0x00021000` | 256 KiB | X | Kernel binary |
+| `0x00061000` | 512 KiB | RWX | Reserved kernel memory |
+| `0x000E1000` | 8 KiB | W | Text video buffer |
+| `0x000E3000` | 4 KiB | RWX | Interrupt descriptor table |
+| `0x000E4000` | 112 KiB | RW | Stack |
 
 ## 6. I/O Ports
 The processor communicates with external hardware devices using the `in` and `out` instructions (i.e. `inb`, `outb`)
