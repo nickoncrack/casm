@@ -414,7 +414,7 @@ This memory structure is temporary and is set up by the CPU after reset. It is s
 | Start VA | Size | Permissions | Description |
 | --- | --- | --- | --- |
 | `0x00000000` | 4 KiB | - | Unmapped page for detecting null pointer dereferences |
-| `0x00001000` | 128 KiB | RWX | BIOS region |
+| `0x00001000` | 128 KiB | RX | BIOS region |
 | `0x00021000` | 256 KiB | X | Kernel binary |
 | `0x00061000` | 512 KiB | RWX | Reserved kernel memory |
 | `0x000E1000` | 8 KiB | W | Text video buffer |
