@@ -1,0 +1,76 @@
+entry 0x00001000
+
+section .data
+    KERN_START def 0x00021000
+    VIDEO_BUFF def 0x000E1000
+    INITIAL_STACK def 0x000FFFFF
+    IDT_ADDR def 0x000E3000
+
+    jmp_table def $
+    jmp_table_len def 2
+    dd 0 // BIOS_print
+    dd 0 // BIOS_sprint
+
+section .code
+int80_handler:
+    pusha
+
+    mul a, 4
+
+    cmp a, jmp_table_len
+    jl [jmp_table + a]
+
+    mov a, 0xFFFFFFFF // error
+
+    popa
+    iret
+
+main:
+    cli
+
+    lidt IDT_ADDR // setup default idt
+    movd [IDT_ADDR + 0x200], int80_handler // int 0x80
+    
+    mov sp, INITIAL_STACK
+
+    // set the IOPL to 1 before jumping to kernel
+    setf 0b0010000
+
+    jmp KERN_START
+
+end_print:
+    in 0x0200, 0 // update screen
+
+    popa
+    iret
+
+print_internal:
+    movb [d], [b]
+
+    add d, 1
+    movb [d], 0x07 // white
+
+    add b, 1
+    add d, 1
+
+    cmp d, VIDEO_BUFF+c
+    je end_print
+    jmp print_internal
+
+// b = msg, c = len
+BIOS_print:
+    mul c, 2
+    mov d, VIDEO_BUFF
+    jmp print_internal
+
+// b = msg, c = len
+BIOS_sprint:
+    in 0x0100, [b]
+    
+    add b, 1
+    sub c, 1
+    cmp c, 0
+    jnz BIOS_sprint
+
+    popa
+    iret
