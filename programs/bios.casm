@@ -8,8 +8,8 @@ section .data
 
     jmp_table def $
     jmp_table_len def 2
-    dd 0 // BIOS_print
-    dd 0 // BIOS_sprint
+    dd 0 ; BIOS_print
+    dd 0 ; BIOS_sprint
 
 section .code
 int80_handler:
@@ -20,7 +20,7 @@ int80_handler:
     cmp a, jmp_table_len
     jl [jmp_table + a]
 
-    mov a, 0xFFFFFFFF // error
+    mov a, 0xFFFFFFFF ; error
 
     popa
     iret
@@ -28,18 +28,18 @@ int80_handler:
 main:
     cli
 
-    lidt IDT_ADDR // setup default idt
-    movd [IDT_ADDR + 0x200], int80_handler // int 0x80
+    lidt IDT_ADDR ; setup default idt
+    movd [IDT_ADDR + 0x200], int80_handler ; int 0x80
     
     mov sp, INITIAL_STACK
 
-    // set the IOPL to 1 before jumping to kernel
+    ; set the IOPL to 1 before jumping to kernel
     setf 0b0010000
 
     jmp KERN_START
 
 end_print:
-    in 0x0200, 0 // update screen
+    in 0x0200, 0 ; update screen
 
     popa
     iret
@@ -48,7 +48,7 @@ print_internal:
     movb [d], [b]
 
     add d, 1
-    movb [d], 0x07 // white
+    movb [d], 0x07 ; white
 
     add b, 1
     add d, 1
@@ -57,13 +57,13 @@ print_internal:
     je end_print
     jmp print_internal
 
-// b = msg, c = len
+; b = msg, c = len
 BIOS_print:
     mul c, 2
     mov d, VIDEO_BUFF
     jmp print_internal
 
-// b = msg, c = len
+; b = msg, c = len
 BIOS_sprint:
     in 0x0100, [b]
     
