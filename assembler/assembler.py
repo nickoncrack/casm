@@ -535,7 +535,7 @@ struct: str = ""
 def parse_instruction(ins: str) -> Union[instruction, Literal[0, -1, -2], List[instruction]]:
     global struct
 
-    s0 = ins.split(sep="//", maxsplit=1) # remove comments
+    s0 = ins.split(sep=";", maxsplit=1) # remove comments
     s = s0[0].split(maxsplit=1) # split between instruction and operands
     if len(s) == 0:
         return 0 # no instruction
