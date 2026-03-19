@@ -17,7 +17,7 @@ A hardware program that works on a homemade instruction set
 + `[addr]`: Memory dereference
 + `addr+10`: Symbolic reference (strictly in bytes)
 + `instruction[x]`: Any width variant
-+ In this document a semicolon is used to denote a comment inside a code block, in to-be-assembled code `//` must be used instead.
++ A semicolon is used to denote a comment.
 
 ### 0c. Data types
 | Type | Width | Range |
@@ -415,7 +415,7 @@ This memory structure is temporary and is set up by the CPU after reset. It is s
 | --- | --- | --- | --- |
 | `0x00000000` | 4 KiB | - | Unmapped page for detecting null pointer dereferences |
 | `0x00001000` | 128 KiB | RX | BIOS region |
-| `0x00021000` | 256 KiB | X | Kernel binary |
+| `0x00021000` | 256 KiB | RWX | Kernel binary |
 | `0x00061000` | 512 KiB | RWX | Reserved kernel memory |
 | `0x000E1000` | 8 KiB | W | Text video buffer |
 | `0x000E3000` | 4 KiB | RWX | Interrupt descriptor table |
