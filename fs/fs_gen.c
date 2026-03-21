@@ -290,6 +290,7 @@ node_t *mknode(FILE *fp, char *path, uint8_t type) {
     child->mode = 0;
     strcpy(child->name, pwd_split[nsplits-1]);
 
+    parent_cluster -= (sizeof(struct cluster) + sizeof(node_t)) / FAT_ENTRY_SIZE; // return to offset 0 so the pointer is freeable
     for (int k = 0; k < nsplits; k++) {
         free(pwd_split[k]);
     }
