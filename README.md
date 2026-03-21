@@ -1,5 +1,5 @@
-# casm
-A hardware program that works on a homemade instruction set
+# Info
+The goal of this project is to create a functional operating system using the `casm` instruction set which is defined in this project, therefore, this repository does not contain only the emulator and the assembler for the `casm` instruction set, but also other vital components of an operating system such as a BIOS implementation, a kernel, a file system, etc.
 
 # Documentation
 ## 0. Definitions
