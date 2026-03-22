@@ -532,7 +532,7 @@ def __handle_ddef(d: str, struct: str = "") -> Literal[0, 1, 2]:
     return 0
 
 struct: str = ""
-def parse_instruction(ins: str) -> Union[instruction, Literal[0, -1, -2], List[instruction]]:
+def parse_directive(ins: str) -> Literal[0, -1, -2]:
     global struct
 
     s0 = ins.split(sep=";", maxsplit=1) # remove comments
@@ -540,64 +540,74 @@ def parse_instruction(ins: str) -> Union[instruction, Literal[0, -1, -2], List[i
     if len(s) == 0:
         return 0 # no instruction
 
+    # parse directives
+    if struct and s[0] == D_ESTRUCT:
+        type_table[struct]["size"] = type_table[struct]["fields"]["$last_elm"]
+        del type_table[struct]["fields"]["$last_elm"]
+
+        struct = ""
+        return 0
+
+    d = __handle_ddef(s0[0], struct)
+    if d == 0:
+        return 0
+    elif d == 1 or (d == 2 and struct):
+        return INVALID_OPCODE
+    
+    if s[0] == D_STRUCT:
+        if s[1] in type_table:
+            print(f"Attempted redefinition of struct `{s[1]}`")
+            sys.exit(0)
+        
+        struct = s[1]
+        type_table[s[1]] = {"fields": {"$last_elm": 0}}
+        return 0
+    elif s[0] == D_SECT:
+        if s[1] == ".data":
+            if SECT_CODE in sym_table: # .data must be placed first
+                return INVALID_COMB
+
+            # if .data is present it has a fixed address:
+            # &(.data) = org + jmp <main> (10)
+            sym_table[SECT_DATA] = entry_point + 0x0A
+        elif s[1] == ".code":
+            sym_table[SECT_CODE] = sym_table["$"]["addr"]
+        else:
+            print(f"Invalid section definition at line {crt_line}")
+            sys.exit(0)
+
+        return 0 # directive executed
+    else: # might be <symbol> d[x]/def <data>
+        if s[1].startswith(D_DEF):
+            # <symbol> def <addr>
+            split = s[1].split()
+            try:
+                addr = __parse_int(split[1])
+            except ValueError:
+                # addr must strictly be an integer
+                addr = int(__sym_ref(split[1])) # type: ignore
+
+            if s[0] in sym_table:
+                print(f"Duplicate definition of symbol `{s[0]}` (line {crt_line})")
+
+            sym_table[s[0]] = {"addr": addr, "type": "d"}
+            return 0
+        
+    return INVALID_OPCODE
+
+def parse_instruction(ins: str) -> Union[instruction, Literal[0, -1, -2], List[instruction]]:
+    s0 = ins.split(sep=";", maxsplit=1) # remove comments
+    s = s0[0].split(maxsplit=1) # split between instruction and operands
+    if len(s) == 0:
+        return 0 # no instruction
+
     opcode = s[0]
     if opcode not in instructions and opcode[:-1] not in instructions:
-        # parse directives
-        if struct and s[0] == D_ESTRUCT:
-            type_table[struct]["size"] = type_table[struct]["fields"]["$last_elm"]
-            del type_table[struct]["fields"]["$last_elm"]
+        return INVALID_OPCODE # directives were already parsed
 
-            struct = ""
-            return 0
-
-        d = __handle_ddef(s0[0], struct)
-        if d == 0:
-            return 0
-        elif d == 1 or (d == 2 and struct):
-            return INVALID_OPCODE
-        
-        if s[0] == D_STRUCT:
-            if s[1] in type_table:
-                print(f"Attempted redefinition of struct `{s[1]}`")
-                sys.exit(0)
-            
-            struct = s[1]
-            type_table[s[1]] = {"fields": {"$last_elm": 0}}
-            return 0
-        elif s[0] == D_SECT:
-            if s[1] == ".data":
-                if SECT_CODE in sym_table: # .data must be placed first
-                    return INVALID_COMB
-
-                # if .data is present it has a fixed address:
-                # &(.data) = org + jmp <main> (10)
-                sym_table[SECT_DATA] = entry_point + 0x0A
-            elif s[1] == ".code":
-                sym_table[SECT_CODE] = sym_table["$"]["addr"]
-            else:
-                print(f"Invalid section definition at line {crt_line}")
-                sys.exit(0)
-
-            return 0 # directive executed
-        else: # might be <symbol> d[x]/def <data>
-            if s[1].startswith(D_DEF):
-                # <symbol> def <addr>
-                split = s[1].split()
-                try:
-                    addr = __parse_int(split[1])
-                except ValueError:
-                    # addr must strictly be an integer
-                    addr = int(__sym_ref(split[1])) # type: ignore
-
-                if s[0] in sym_table:
-                    print(f"Duplicate definition of symbol `{s[0]}` (line {crt_line})")
-
-                sym_table[s[0]] = {"addr": addr, "type": "d"}
-                return 0     
-
-    # # instructions can be only placed in .code
-    # if SECT_CODE not in sym_table:
-    #     return INVALID_OPCODE
+    # instructions can be only placed in .code
+    if SECT_CODE not in sym_table:
+        return INVALID_OPCODE
 
     try:
         operands = instructions[opcode]["operands"]
@@ -663,6 +673,73 @@ def parse_instruction(ins: str) -> Union[instruction, Literal[0, -1, -2], List[i
 
         return ret
 
+# any instruction that requires expansion is always expanded into 3 instructions
+def requires_expansion(ins: str) -> bool:
+    try:
+        ops = ins.split(maxsplit=1)[1].split(",") # split operands
+    except IndexError: # no operands
+        return False
+
+    for op in ops:
+        op = op.strip()
+        op = op.replace("-", "+-")
+        if op[0] == '[' and op[-1] == ']':
+            op = op[1:-1]
+
+        split1 = op.split("+")
+        for i in range(len(split1)):
+            split1[i] = split1[i].strip()
+
+        refs = __reg_refs(split1)
+        if refs[0] == 1 and len(split1) != 1:
+            return True
+
+    return False
+
+# stage 1 parses the data section and calculates the address of each label
+def stage1(s: list[str]) -> None:
+    global crt_line
+
+    crt = sym_table["$"]["addr"]
+
+    for i in s:
+        i = i.strip()
+        if i == "" or i[0] == ";":
+            if SECT_CODE not in sym_table:
+                crt_line += 1
+
+            continue
+
+        if SECT_CODE not in sym_table:
+            p = parse_directive(i)
+            if p != 0:
+                print(f"Failed to parse directive: `{i}`")
+                sys.exit(0)
+
+            crt_line += 1
+            crt = sym_table["$"]["addr"]
+        else:
+            if i.endswith(":"):
+                if re.match("^[a-zA-Z_]{1}[a-zA-Z0-9_]+$", i[:-1]):
+                    if i[:-1] in sym_table:
+                        print(f"Duplicate definition of symbol `{i[:-1]}`.")
+                        sys.exit(0)
+
+                    if SECT_CODE not in sym_table:
+                        print("Cannot define a function outside of .code")
+                        sys.exit(0)
+
+                    sym_table[i[:-1]] = {"addr": crt, "type": "d"}
+                    continue
+                else:
+                    print(f"Syntax error: Invalid function name `{i[:-1]}`")
+                    sys.exit(0)
+
+            r = requires_expansion(i)
+            if r: crt += 20
+            crt += 10
+
+    return
 
 def parse_program(file: str) -> Union[List[instruction], Literal[0]]:
     global entry_point, sym_table, crt_line, lines
@@ -687,47 +764,40 @@ def parse_program(file: str) -> Union[List[instruction], Literal[0]]:
     # code section parsing
     n = 0 # nth instruction
 
-    for i in range(len(lines)):
+    stage1(lines)
+
+    for i in range(crt_line-1, len(lines)):
         # empty lines or comments
         if lines[i] == "" or lines[i][0] == '/' and lines[i][1] == '/':
             crt_line += 1
             continue
-    
-        if lines[i].endswith(":"): # function declaration
-            if re.match("^[a-zA-Z_]{1}[a-zA-Z0-9_]+$", lines[i][:-1]): # match letters only
-                if lines[i][:-1] in sym_table:
-                    print(f"Duplicate definition of symbol `{lines[i][:-1]}` in {file}:{crt_line}")
-                    sys.exit(0)
 
-                if SECT_CODE not in sym_table:
-                    print("Cannot define a function outside of .code")
-                    sys.exit(0)
+        # labels are already parsed
+        if lines[i][-1] == ":":
+            crt_line += 1
+            continue
 
-                sym_table[lines[i][:-1]] = {"addr": sym_table[SECT_CODE] + n * INSTRUCTION_SIZE, "type": "d"}
-            else:
-                print(f"Syntax error in {file}:{crt_line}: Invalid function name `{lines[i][:-1]}`")
-                sys.exit(0)
-        else:
-            ins = parse_instruction(lines[i])
-            if ins == INVALID_OPCODE:
-                print(f"Invalid opcode in {file}:{crt_line}")
-                sys.exit(0)
-            elif ins == INVALID_COMB:
-                print(f"Invalid combination of opcode and operands in {file}:{crt_line}")
-                sys.exit(0)
-            elif ins == 0:
-                crt_line += 1
-                continue
-            
-            if type(ins[0]) == int: # instruction parse returned single instruction
-                ret.append(ins) # type: ignore
-                n += 1
+        ins = parse_instruction(lines[i])
+        if ins == INVALID_OPCODE:
+            print(lines[i])
+            print(f"Invalid opcode in {file}:{crt_line}")
+            sys.exit(0)
+        elif ins == INVALID_COMB:
+            print(f"Invalid combination of opcode and operands in {file}:{crt_line}")
+            sys.exit(0)
+        elif ins == 0:
+            crt_line += 1
+            continue
+        
+        if type(ins[0]) == int: # instruction parse returned single instruction
+            ret.append(ins) # type: ignore
+            n += 1
+            sym_table["$"]["addr"] += INSTRUCTION_SIZE
+        else: # returned multiple instructions
+            for j in ins:
+                ret.append(j) # type: ignore
+                n += 1 # instruction count
                 sym_table["$"]["addr"] += INSTRUCTION_SIZE
-            else: # returned multiple instructions
-                for j in ins:
-                    ret.append(j) # type: ignore
-                    n += 1 # instruction count
-                    sym_table["$"]["addr"] += INSTRUCTION_SIZE
                 
         crt_line += 1
 
