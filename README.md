@@ -247,10 +247,10 @@ addr     op    operand 1   operand 2      <sym+i>     instruction
 0x103C | 14 07 00 00 10 06 00 00 00 00    <loop+3>    je <end+0>
 0x1046 | 14 0B 00 00 10 18 00 00 00 00    <loop+4>    jl <loop+1>
 0x1050 | 11 03 00 00 00 00 00 00 00 00    <main+0>    mov a, 0
-0x105A | 11 03 01 00 00 00 00 00 00 0A    <main+1>    mov b, 10
-0x1064 | 10 03 04 00 00 00 01 00 00 00    <main+2>    mov r0, b
-0x106E | 11 02 04 00 00 00 00 00 10 02    <main+3>    add r0, <loop+0>
-0x1078 | 10 11 04 00 00 00 00 00 00 00    <main+4>    jmp r0
+0x105A | 11 03 00 00 00 01 00 00 00 0A    <main+1>    mov b, 10
+0x1064 | 10 03 00 00 00 04 00 00 00 01    <main+2>    mov r0, b
+0x106E | 11 02 00 00 00 04 00 00 10 02    <main+3>    add r0, <loop+0>
+0x1078 | 10 11 00 00 00 04 00 00 00 00    <main+4>    jmp r0
 ```
 <sub>Note: Here `<sym+i>` represents the *i*th instruction, unlike symbolic addition (`func+10`) which respresents bytes.</sub>
 
@@ -280,7 +280,7 @@ The prefix itself, consists of 3 sections (does **not** apply for `movs`, see se
 <br>
 
 2. The opcode, which is the second byte in an instruction, tells the processor which instruction we want to execute. The opcode list can be found in section `3a`
-3. The operands occupy the rest of the available bytes in our 10 byte instruction with each operand occupying 4 bytes. Each operand can either contain a register or an immediate value (as explained above). If an operand contains a register, then its most significant byte will contain a number which corresponds to the register.
+3. The operands occupy the rest of the available bytes in our 10 byte instruction with each operand occupying 4 bytes. Each operand can either contain a register or an immediate value (as explained above). If an operand contains a register, then its least significant byte will contain a number which corresponds to the register.
 <br>
 
 Notice how the instruction at address `0x1000` which is `jmp <main+0>` (or `jmp 0x1050` if you like) doesn't exist in the initial program. This is used to simplify the assembly process. The instruction `entry 0x1000` doesn't *really* set the entry point (beginning of `main`) to `0x1000`, instead, it tells the assembler that the entire program will be placed at that address. Since the code is parsed line by line, it means that if the main function is first, it can't make any symbol references, as almost all other symbols will be defined after the main function. Therefore, once the assembly is completed, the assembler finds the address of the first instruction of `main` and places a jump instruction to that address at the top of the program.
