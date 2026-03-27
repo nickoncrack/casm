@@ -445,3 +445,7 @@ SDL_ttf
 + License: zlib license
 + Source: https://github.com/libsdl-org/SDL_ttf
 + Website: https://www.libsdl.org
+
+ibmvga16x9.ttf
++ License: CC-BY-SA 4.0
++ Website: https://int10h.org/oldschool-pc-fonts
