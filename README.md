@@ -434,3 +434,14 @@ The processor communicates with external hardware devices using the `in` and `ou
 - **0x0002 (INT_CNT):** Returns the number of timer interrupts triggered since reset.
 - **0x0003 (SET_THRESH):** Sets the cycle threshold for the next `INT 0x20`.
 - **0x0004 (RESET_INT_CNT):** Resets the number of interrupts triggered.
+
+## Third party software
+SDL2 (Simple DirectMedia Layer)
++ License: zlib license
++ Source: https://github.com/libsdl-org/SDL
++ Website: https://www.libsdl.org/
+
+SDL_ttf
++ License: zlib license
++ Source: https://github.com/libsdl-org/SDL_ttf
++ Website: https://www.libsdl.org
