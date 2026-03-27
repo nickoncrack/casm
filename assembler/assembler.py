@@ -142,7 +142,7 @@ def __val_2op(ins: str, operands: list) -> Union[instruction, Literal[-1, -2, -3
             if operand_types[i] not in ("reg", "any"):
                 return INVALID_COMB
             
-            ret[2 + 4*i] = register_list.index(operands[i])
+            ret[5 + 4*i] = register_list.index(operands[i])
         else: # operand is not a plain register
             if operand_types[i] == "reg":
                 return INVALID_COMB
@@ -178,7 +178,7 @@ def __val_2op(ins: str, operands: list) -> Union[instruction, Literal[-1, -2, -3
             except ValueError:
                 # check if operand is a register (i.e. movb a, [b])
                 if operands[i] in register_list: # operand is already stripped
-                    ret[2 + 4*i] = register_list.index(operands[i])
+                    ret[5 + 4*i] = register_list.index(operands[i])
                 else:
                     return INVALID_COMB
 
@@ -187,7 +187,7 @@ def __val_2op(ins: str, operands: list) -> Union[instruction, Literal[-1, -2, -3
         return INVALID_COMB
 
     if ins == "movs":
-        if ret[0] != 0b0000_11_11:
+        if ret[0] != 0b0000_11_10 and ret[0] != 0b0000_10_11: # source operand can be a register
             return INVALID_COMB
 
         t = list(filter(lambda x: x != "int", operand_types))[0]
@@ -224,7 +224,7 @@ def __val_1op(ins: str, operand: str) -> Union[instruction, Literal[-1, -2]]:
         if operand_types[0] == "int":
             return INVALID_COMB
         
-        ret[2] = register_list.index(operand)
+        ret[5] = register_list.index(operand)
     else:
         if operand_types[0] == "reg":
             return INVALID_COMB
@@ -252,7 +252,7 @@ def __val_1op(ins: str, operand: str) -> Union[instruction, Literal[-1, -2]]:
         except ValueError:
             # opcode [reg]
             if operand in register_list:
-                ret[2] = register_list.index(operand)
+                ret[5] = register_list.index(operand)
             else:
                 return INVALID_COMB
         
@@ -376,7 +376,7 @@ def __sym_ref(op: str, is_op1: bool = False) -> Union[str, instruction, list]:
 
             ret.append([
                 PRE_BASE, 0x03,             # mov
-                0x04, 0x00, 0x00, 0x00,     # r0
+                0x00, 0x00, 0x00, 0x04,     # r0
                 reg_idx, 0x00, 0x00, 0x00   # refs[1][0]
             ])
         except ValueError as e:
@@ -388,13 +388,13 @@ def __sym_ref(op: str, is_op1: bool = False) -> Union[str, instruction, list]:
 
             ret.append([
                 PRE_BASE | PRE_INT, 0x03,   # mov
-                0x04, 0x00, 0x00, 0x00,     # r0
+                0x00, 0x00, 0x00, 0x04,     # r0
                 0x00, 0x00, 0x00, 0x00      # 0
             ])
 
             ret.append([
                 PRE_BASE, 0x16,             # sub
-                0x04, 0x00, 0x00, 0x00,     # r0
+                0x00, 0x00, 0x00, 0x04,     # r0
                 reg_idx, 0x00, 0x00, 0x00   # refs[1][0]
             ])
 
@@ -412,7 +412,7 @@ def __sym_ref(op: str, is_op1: bool = False) -> Union[str, instruction, list]:
 
         ret.append([
             PRE_BASE | PRE_INT, 0x02,   # add
-            0x04, 0x00, 0x00, 0x00,     # r0
+            0x00, 0x00, 0x00, 0x04,     # r0
             (sh >> 8) & 0xFF,
             sh & 0xFF,
             (sl >> 8) & 0xFF,
@@ -626,7 +626,7 @@ def parse_instruction(ins: str) -> Union[instruction, Literal[0, -1, -2], List[i
             split[0] = __sym_ref(split[0]) # type: ignore
 
             ref = __sym_ref(split[1])
-            if type(ref) == list: # the second operand referenced a register (__sym_ref returned instructions)
+            if type(ref) == list and opcode != "movs": # the second operand referenced a register (__sym_ref returned instructions)
                 if split[1][0] == '[' and split[1][-1] == ']':
                     split[1] = "[r0]"
                 else:
@@ -779,7 +779,6 @@ def parse_program(file: str) -> Union[List[instruction], Literal[0]]:
 
         ins = parse_instruction(lines[i])
         if ins == INVALID_OPCODE:
-            print(lines[i])
             print(f"Invalid opcode in {file}:{crt_line}")
             sys.exit(0)
         elif ins == INVALID_COMB:
