@@ -1,0 +1,239 @@
+entry 0x00021000
+
+section .data
+    BIOS_MEM    def 0x00019000
+    IDT_ADDR    def 0x00063000
+    KERNEL_MEM  def 0x00080000
+    PT_END      def 0x00580000
+
+    int0_len def 22
+    int0_msg db "Division by zero error"
+
+    int1_len def 24
+    int1_msg db "Invalid opcode exception"
+
+    int4_len def 70
+    int4_msg db "Attempted to execute a privileged instruction in non-privileged space."
+
+    struct page_t
+        phy_addr dd
+
+        ; present: 1
+        ; kernel: 1
+        ; perms: 3
+        ; reserved: 4
+        params db
+    end_struct
+    PAGE_T_SIZE def 5
+
+    struct idt_entry_t
+        addr dd
+
+        ; current iopl: 3
+        ; reserved: 5
+        params db
+    end_struct
+    IDT_ENTRY_SIZE def 5
+
+    struct hwinfo_t
+        mem_size dd
+    end_struct
+
+    hwinfo ds hwinfo_t
+    page ds page_t
+    idt_entry ds idt_entry_t
+
+    FT_END dd 0 ; frame table end
+    tick_cnt dd 0
+
+section .code
+
+; @params: none
+; @return: a = physical address
+alloc_frame:
+    pusha
+    mov a, PT_END
+
+alloc_frame_loop:
+    movd b, [FT_END]
+    cmp a, b
+    jge no_frames
+
+    movd b, [a]
+    cmp b, 0xFFFFFFFF ; check if all bits are set
+    jne alloc_frame_found
+
+    add a, 4
+    jmp alloc_frame_loop
+
+alloc_frame_found:
+    push a
+
+    ; logic: ~(b & (1 << a)) == 1 -> found
+    mov a, 0
+    mov c, b
+    mov d, 1
+
+    lsh d, a ; d << a
+    and c, d ; c &= d
+    add a, 1
+
+    cmp c, 0
+    jnz $-60 ; line 47
+
+    ; set bit
+    pop c ; pop old a value to c
+    or b, d
+    movd [c], b
+
+    sub a, 1 ; rightmost unset bit
+    mov b, 31
+    sub b, a ; b = 31 - a
+
+    sub c, PT_END
+
+    ; c -> byte index, b -> bit index
+    ; PA = 8*4096*c + 4096*b
+    mul c, 0x8000
+    mul b, 0x1000
+
+    add c, b
+    mov r0, c ; popa doesn't pop r0
+
+    popa
+    mov a, r0
+    mov r0, 0
+
+    ret
+
+no_frames:
+    popa
+    mov a, 0
+
+    ret
+
+
+; @params: a = VA, b = kernel
+; @return: a = 0 success, a = 1 page already exists
+alloc_page:
+    pusha
+
+    div 0x1000 ; floor division, will automatically align to 4 KiB
+    
+    ; calculate address of page entry
+    mul a, PAGE_T_SIZE
+    add a, KERNEL_MEM ; page table lives at the start of kernel data
+    movs [page], [a]
+
+    movb c, [page.params]
+    and c, 0b10000000 ; present bit 
+
+    cmp c, 0
+    jnz alloc_page_exists
+
+    mov d, a
+    call alloc_frame
+
+    movd [page.phy_addr], a
+    mov a, 0b10000000
+    lsh b, 7
+    or a, b
+    movb [page.params], a
+
+    movs [d], [page]
+
+    popa
+    mov a, 0
+    ret
+
+alloc_page_exists:
+    mov a, 1
+    ret
+
+
+; @params: a = interrupt number, b = handler address
+; @return: a = 0 success, a = 1 error
+set_idt_entry:
+    cmp a, 0x80 ; cannot overwrite the bios interrupt
+    je set_idt_entry_error
+
+    pusha
+    mul a, IDT_ENTRY_SIZE
+    add a, IDT_ADDR
+
+    movd [idt_entry.addr], b
+    movb [idt_entry.params], 0b00100000 ; iopl = 1
+    movs [a], [idt_entry]
+
+    popa
+    mov a, 0
+    ret
+
+set_idt_entry_error:
+    mov a, 1
+    ret
+
+
+int0:
+    pusha
+
+    mov a, 0
+    mov b, int0_msg
+    mov c, int0_len
+    int 0x80
+
+    popa
+    iret
+
+timer_int:
+    push a
+    
+    movd a, [tick_cnt]
+    add a, 1
+    movd [tick_cnt], a
+
+    pop a
+    iret
+
+
+main:
+    ; read hwinfo from bios data start
+    mov a, BIOS_MEM
+    movs [hwinfo], [a]
+    movd a, [hwinfo.mem_size]
+    div 4 ; get memory size in pages
+
+    ; the first 4096 frames are already allocated
+    ; the frame entry width is 1 bit so the initial frame table is 512 bytes
+    mov c, PT_END
+
+loop_ft_1:
+    cmp c, PT_END+512
+    jge main_1
+
+    movd [c], 0xFFFFFFFF ; all bits are set
+    add c, 1
+    jmp loop_ft_1
+
+main_1:
+    ; dummy entry
+    movd [c], 0b11111111111111011111111011111111
+
+    ; the other frames are unused so no need to allocate them
+    div 8 ; get total number of entries in frame table
+    add a, PT_END
+    movd [FT_END], a
+
+    mov a, 0x00
+    mov b, int0
+    call set_idt_entry
+
+    mov a, 0x20
+    mov b, timer_int
+    call set_idt_entry
+
+    in 0x0001, 0x00 ; enable timer
+    sti
+
+    dump
+    end
