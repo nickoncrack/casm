@@ -17,6 +17,7 @@ The goal of this project is to create a functional operating system using the `c
 + `[addr]`: Memory dereference
 + `addr+10`: Symbolic reference (strictly in bytes)
 + `instruction[x]`: Any width variant
++ `#s`: Size of struct `s`
 + A semicolon is used to denote a comment.
 
 ### 0c. Data types
@@ -79,9 +80,9 @@ The following table contains the number corresponding to each register that is m
 
 ### 1b. Processor state on kernel entry
 + `flags` = `0x0010` (iopl = 1)
-+ `ip` = `0x00010000`
-+ `sp` = `0x00FFFFFF`
-+ `pta` = `0x00081000`
++ `ip` = `0x00021000`
++ `sp` = `0x0007FFFF`
++ `pta` = `0x00080000`
 + `a,b,c,d` = `0x00000000`
 
 ## 2. Assembler
@@ -183,6 +184,11 @@ value2 ds st2
 ```asm
 movs [st], [0xFFFFF] ; read struct from memory
 movs [0xFFFFF], [st] ; write struct to memory
+```
+
++ `#s` is used to retrieve the size of a struct
+```asm
+mov a, #s
 ```
 
 ### 2e. Stages of the assembly
@@ -416,10 +422,12 @@ This memory structure is temporary and is set up by the CPU after reset. It is s
 | `0x00000000` | 4 KiB | - | Unmapped page for detecting null pointer dereferences |
 | `0x00001000` | 128 KiB | RX | BIOS region |
 | `0x00021000` | 256 KiB | RWX | Kernel binary |
-| `0x00061000` | 512 KiB | RWX | Reserved kernel memory |
-| `0x000E1000` | 8 KiB | W | Text video buffer |
-| `0x000E3000` | 4 KiB | RWX | Interrupt descriptor table |
-| `0x000E4000` | 112 KiB | RW | Stack |
+| `0x00061000` | 8 KiB | W | Text video buffer |
+| `0x00063000` | 4 KiB | RWX | Interrupt descriptor table |
+| `0x00064000` | 112 KiB | RWX | Stack |
+| `0x00080000` | 15872 KiB | RW | Kernel memory |
+
++ The initial mapped memory is 16 MiB and not less as it needs to be large enough to host a page table for the entire address space (~5 MiB) and other data structures required for initializing the kernel. 
 
 ## 6. I/O Ports
 The processor communicates with external hardware devices using the `in` and `out` instructions (i.e. `inb`, `outb`)
