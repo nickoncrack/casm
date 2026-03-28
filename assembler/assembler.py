@@ -198,23 +198,20 @@ def __val_2op(ins: str, operands: list) -> Union[instruction, Literal[-1, -2, -3
          
     return ret
     
-def __val_1op(ins: str, operand: str) -> Union[instruction, Literal[-1, -2]]:
-    ret: instruction = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+def __val_1op(ins: str, operand: str):
+    ret = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 
-    try: # we can do this since the opcode is already validated
-        if ins not in instructions:
-            if not instructions[ins[:-1]]["variableMemoryWidth"] or ins[-1] not in MEM_WIDTH_SUFFIXES:
-                return INVALID_OPCODE
-                
-            # +5 since the operands occupy 4 bits and the base instruction bit 1
-            ret[0] = 1 << (MEM_WIDTH_SUFFIXES.index(ins[-1]) + 5)
-            ins = ins[:-1]
+    if ins not in instructions:
+        if not instructions[ins[:-1]]["variableMemoryWidth"] or ins[-1] not in MEM_WIDTH_SUFFIXES:
+            return INVALID_OPCODE
+            
+        # +5 since the operands occupy 4 bits and the base instruction bit 1
+        ret[0] = 1 << (MEM_WIDTH_SUFFIXES.index(ins[-1]) + 5)
+        ins = ins[:-1]
 
-            # an instruction with memory suffix accepts all operand types
-            operand_types = ["any", "any"]
-        else:
-            operand_types = instructions[ins]["operands"]
-    except KeyError: # base instruction
+        # an instruction with memory suffix accepts all operand types
+        operand_types = ["any", "any"]
+    else:
         ret[0] = PRE_BASE
         operand_types = instructions[ins]["operands"]
 
@@ -327,6 +324,10 @@ def __rs_term(term: str) -> list: # [address, type]
 
     if term in sym_table:
         return [sym_table[term]["addr"] * n, sym_table[term]["type"]]
+
+    if term[0] == '#': # struct size
+        if term[1:] in type_table:
+            return [type_table[term[1:]]["size"], "d"]
 
     raise Exception(f"Failed to resolve symbol at line {crt_line}: `{term}`")
 
@@ -779,9 +780,11 @@ def parse_program(file: str) -> Union[List[instruction], Literal[0]]:
 
         ins = parse_instruction(lines[i])
         if ins == INVALID_OPCODE:
+            print(lines[i])
             print(f"Invalid opcode in {file}:{crt_line}")
             sys.exit(0)
         elif ins == INVALID_COMB:
+            print(lines[i])
             print(f"Invalid combination of opcode and operands in {file}:{crt_line}")
             sys.exit(0)
         elif ins == 0:
