@@ -1,6 +1,30 @@
 # Info
 The goal of this project is to create a functional operating system using the `casm` instruction set which is defined in this project, therefore, this repository does not contain only the emulator and the assembler for the `casm` instruction set, but also other vital components of an operating system such as a BIOS implementation, a kernel, a file system, etc.
 
+## TODOs
++ Optimize renderer by marking modified regions as dirty
++ Finish the pool allocator implementation (kmalloc, free)
++ Add file including support in the assembler (very important)
++ Add a minimal file system which allows parsing a root directory and reading files.
++ Switch to a second stage bootloader.
+
+## Benchmarks
+### Current early kernel init
++ 187500 instructions in ~6.5ms (no sdl window)
++ 187500 instructions in ~13.3ms (with sdl window)
++ 187500 instructions in 998~1162ms (debug)
+
+### Minimal kernel init (interrupts and initial page table only)
++ 1402 instructions in 0.06ms
++ 1402 instructions in ~12ms (debug)
+
+### Projected long term performance
++ 28.8M instructions/sec (no sdl window)
++ 14.4M instructions/sec (with sdl window)
++ 161000 instructions/sec (debug)
+
+<sub>Current sdl renderer is not fully optimized</sub>
+
 # Documentation
 ## 0. Definitions
 
