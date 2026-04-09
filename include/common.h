@@ -5,6 +5,7 @@
 
 #define SDL_WINDOW
 #define DEBUG
+#define SHOW_INT
 
 #define MEMORY_SIZE_KB 65536 // 64 MiB (max PA = 0x03FFFFFF)
 #define OPERAND_SIZE sizeof(uint32_t)
