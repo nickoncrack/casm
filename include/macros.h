@@ -5,6 +5,10 @@
 #define __W PRE_WORD
 #define __D PRE_DWORD
 
+#define _B 1
+#define _W 2
+#define _D 4
+
 #define __MASK_B 0xFF
 #define __MASK_W 0xFFFF
 #define __MASK_D 0xFFFFFFFF
@@ -42,6 +46,13 @@
         ip = ret - INSTRUCTION_SIZE; \
     }
 
+#define ASSERT_COND_CHECK(cond) \
+    if (flags & (cond)) return 1; \
+    else handle_interrupt(E_ASSERTION, 0);  
+
+#define ASSERT_NCOND_CHECK(cond) \
+    if (~flags & (cond)) return 1; \
+    else handle_interrupt(E_ASSERTION, 0);
 
 /* 
     instruction macros
@@ -55,6 +66,24 @@
         if (prefix & PRE_PTR1) MEM_WRITE##WIDTH(temp1, val); \
         else registers[reg1] = val; \
         return 2; \
+    }
+
+#define __PUSH(WIDTH) \
+    case __##WIDTH: { \
+        if (prefix & PRE_PTR1) val = MEM_READ##WIDTH(temp1); \
+        else val = temp1 & __MASK_##WIDTH; \
+        PUSH##WIDTH(temp1); \
+        return 2; \
+    }
+
+#define __POP(WIDTH) \
+    case __##WIDTH: { \
+        if (sp + _##WIDTH >= INITIAL_STACK) { \
+            registers[REGISTER_SP] = sp + _##WIDTH; \
+            handle_interrupt(E_OUT_OF_BOUNDS, 0); \
+        } \
+        POP##WIDTH(&registers[reg1]); \
+        return 1; \
     }
 
 #define __ADD(WIDTH) \
