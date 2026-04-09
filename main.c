@@ -52,7 +52,7 @@ page_t *get_page(uint32_t va) {
 
     if (!page->present) {
         handle_interrupt(E_PAGE, E_PAGE_PRESENT);
-        return 0;
+        return NULL;
     }
     return page;
 }
@@ -61,10 +61,12 @@ uint32_t VA_TO_PA(uint32_t va) {
     uint32_t off = va % PAGE_SIZE;
     page_t *page = get_page(va);
 
+    if (page == NULL) return 0;
+
     return page->physical_addr + off;
 }
 
-void push(uint32_t op) {
+void PUSHD(uint32_t op) {
     memory[VA_TO_PA(sp-0)] = (op >> 0x00) & 0xFF;
     memory[VA_TO_PA(sp-1)] = (op >> 0x08) & 0xFF;
     memory[VA_TO_PA(sp-2)] = (op >> 0x10) & 0xFF;
@@ -75,7 +77,7 @@ void push(uint32_t op) {
     return;
 }
 
-void pushw(uint16_t op) {
+void PUSHW(uint16_t op) {
     memory[VA_TO_PA(sp-0)] = (op >> 0x00) & 0xFF;
     memory[VA_TO_PA(sp-1)] = (op >> 0x08) & 0xFF;
 
@@ -84,7 +86,15 @@ void pushw(uint16_t op) {
     return;
 }
 
-void pop(uint32_t *dst) {
+void PUSHB(uint8_t op) {
+    memory[VA_TO_PA(sp)] = op;
+    
+    sp--;
+    registers[REGISTER_SP]--;
+    return;
+}
+
+void POPD(uint32_t *dst) {
     memcpy(dst, &memory[VA_TO_PA(sp+1)], OPERAND_SIZE);
     *dst = __builtin_bswap32(*dst);
 
@@ -93,7 +103,7 @@ void pop(uint32_t *dst) {
     return;
 }
 
-void popw(uint16_t *dst) {
+void POPW(uint16_t *dst) {
     memcpy(dst, &memory[VA_TO_PA(sp+1)], 2);
     *dst = __builtin_bswap16(*dst);
 
@@ -102,10 +112,20 @@ void popw(uint16_t *dst) {
     return;
 }
 
+void POPB(uint8_t *dst) {
+    memcpy(dst, &memory[VA_TO_PA(sp+1)], 1);
+    
+    sp++;
+    registers[REGISTER_SP]++;
+    return;
+}
+ 
 void handle_interrupt(uint8_t n, uint8_t e) {
-    printf("Interrupt: %d\n\tIP=0x%08x, SP=0x%08x\n\tA=0x%08x, B=0x%08x, C=0x%08x, D=0x%08x\n\tPTA=0x%08x, IDT=0x%08x\n",
-        n, ip, sp, registers[0], registers[1], registers[2], registers[3], pta, idt
+    #ifdef SHOW_INT
+    printf("int: v=%02x, e=%02x\n\tIP=0x%08x, SP=0x%08x\n\tA=0x%08x, B=0x%08x, C=0x%08x, D=0x%08x\n\tPTA=0x%08x, IDT=0x%08x\n",
+        n, e, ip, sp, registers[0], registers[1], registers[2], registers[3], pta, idt
     );
+    #endif
 
     if ((flags & INT_FLAG) || (n <= 0x1F) || pending_sw_int) { // if interrupts are enabled or n is an exception
 
@@ -119,12 +139,12 @@ void handle_interrupt(uint8_t n, uint8_t e) {
             exit(0);
         }
 
-        if (n <= 0x1F) {
-            push(e); // error code
-        }
+        PUSHD(ip + INSTRUCTION_SIZE);
+        PUSHW(flags);
 
-        push(ip + INSTRUCTION_SIZE);
-        pushw(flags);
+        if (n <= 0x1F) {
+            PUSHB(e); // error code
+        }
 
         ip = int_entry - INSTRUCTION_SIZE;
         return;
@@ -192,12 +212,12 @@ uint8_t exec() {
     // copy 32 bit operand
     memcpy(&op1, &memory[VA_TO_PA(ip + 2)], OPERAND_SIZE);
     memcpy(&op2, &memory[VA_TO_PA(ip + 2 + OPERAND_SIZE)], OPERAND_SIZE);
-    
+
     // invert endianness (to big endian)
     op1 = __builtin_bswap32(op1);
     op2 = __builtin_bswap32(op2);
 
-    // register value is placed at the most significat byte of the operand
+    // register value is placed at the least significat byte of the operand
     uint16_t operand1h = (op1 >> 16) & 0xFFFF;
     uint16_t operand1l = op1 & 0xFFFF;
 
@@ -329,17 +349,40 @@ uint8_t exec() {
         case PUSH: { // 1 cycle
             SET_TMP1;
 
-            push(temp1);
+            uint32_t val;
+
+            // push[x] has to be also used for pushing immediates
+            switch (prefix & WIDTH_MASK) {
+                case PRE_BASE: {
+                    PUSHD(registers[reg1]);
+                    return 1;
+                }
+
+                __PUSH(B);
+                __PUSH(W);
+                __PUSH(D);
+            }
             return 1;
         }
 
         case POP: { // 1 cycle
-            if (sp + OPERAND_SIZE >= INITIAL_STACK) {
-                registers[REGISTER_SP] = sp + OPERAND_SIZE;
-                handle_interrupt(E_OUT_OF_BOUNDS, 0); 
-            }
+            registers[reg1] = 0; // incase of an out of bounds exception the information of register will be lost
+            switch (prefix & WIDTH_MASK) {
+                case PRE_BASE: {
+                    if (sp + OPERAND_SIZE >= INITIAL_STACK) {
+                        registers[REGISTER_SP] = sp + OPERAND_SIZE;
+                        handle_interrupt(E_OUT_OF_BOUNDS, 0); 
+                    }
 
-            pop(&registers[reg1]);
+                    POPD(&registers[reg1]);
+
+                    return 1;
+                }
+
+                __POP(B);
+                __POP(W);
+                __POP(D);
+            }
             return 1;
         }
 
@@ -347,7 +390,7 @@ uint8_t exec() {
             // call: jumps to instruction BUT pushes the next IP first
             SET_TMP1;
 
-            push(ip + INSTRUCTION_SIZE); // push next instruction
+            PUSHD(ip + INSTRUCTION_SIZE); // push next instruction
             ip = temp1 - INSTRUCTION_SIZE;
 
             return 1;
@@ -359,7 +402,7 @@ uint8_t exec() {
                 handle_interrupt(E_OUT_OF_BOUNDS, 0);
             }
 
-            pop(&ip);
+            POPD(&ip);
             ip -= INSTRUCTION_SIZE;
 
             return 1;
@@ -468,18 +511,18 @@ uint8_t exec() {
                 handle_interrupt(E_OUT_OF_BOUNDS, 0);
             }
 
-            popw(&flags);
-            pop(&ip);
+            POPW(&flags);
+            POPD(&ip);
 
             ip -= INSTRUCTION_SIZE;
             return 2;
         }
 
         case PUSHA: { // 3 cycles
-            push(registers[REGISTER_A]);
-            push(registers[REGISTER_B]);
-            push(registers[REGISTER_C]);
-            push(registers[REGISTER_D]);
+            PUSHD(registers[REGISTER_A]);
+            PUSHD(registers[REGISTER_B]);
+            PUSHD(registers[REGISTER_C]);
+            PUSHD(registers[REGISTER_D]);
 
             return 3;
         }
@@ -492,10 +535,10 @@ uint8_t exec() {
                 handle_interrupt(E_OUT_OF_BOUNDS, 0);
             }
 
-            pop(&registers[REGISTER_D]);
-            pop(&registers[REGISTER_C]);
-            pop(&registers[REGISTER_B]);
-            pop(&registers[REGISTER_A]);
+            POPD(&registers[REGISTER_D]);
+            POPD(&registers[REGISTER_C]);
+            POPD(&registers[REGISTER_B]);
+            POPD(&registers[REGISTER_A]);
 
             return 3;
         }
@@ -566,6 +609,46 @@ uint8_t exec() {
 
         case LPT: { // 1 cycle
             pta = VA_TO_PA(op1);
+            return 1;
+        }
+
+        case SZ: { // 1 cycle
+            ASSERT_COND_CHECK(ZERO_FLAG);
+            return 1;
+        }
+
+        case SNZ: {
+            ASSERT_NCOND_CHECK(ZERO_FLAG);
+            return 1;
+        }
+
+        case SE: {
+            ASSERT_COND_CHECK(EQUAL_FLAG);
+            return 1;
+        }
+
+        case SNE: {
+            ASSERT_NCOND_CHECK(EQUAL_FLAG);
+            return 1;
+        }
+
+        case SG: {
+            ASSERT_COND_CHECK(GREATER_FLAG);
+            return 1;
+        }
+
+        case SGE: {
+            ASSERT_COND_CHECK(EQUAL_FLAG | GREATER_FLAG);
+            return 1;
+        }
+
+        case SL: {
+            ASSERT_NCOND_CHECK(EQUAL_FLAG | GREATER_FLAG | ZERO_FLAG);
+            return 1;
+        }
+
+        case SLE: {
+            ASSERT_NCOND_CHECK(ZERO_FLAG | GREATER_FLAG);
             return 1;
         }
 
@@ -728,7 +811,7 @@ int main() {
     stop = clock();
     double delta = (stop - start) / clocks_per_ms;
 
-    printf("Instructions executed: %llu\nDelta: %lf ms\n", cnt, delta);
+    printf("Instructions executed: %lu\nDelta: %lf ms\n", cnt, delta);
 
     free(memory);
     printf("Execution completed.\n");
