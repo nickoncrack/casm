@@ -1,79 +1,641 @@
-entry 0x00001000
+entry 0x00021000
 
 section .data
-    KERN_START def 0x00021000
-    VIDEO_BUFF def 0x00061000
-    INITIAL_STACK def 0x0007FFFF
-    IDT_ADDR def 0x00063000
+    ; constant addresses
+    BIOS_MEM        def 0x00019000
+    IDT_ADDR        def 0x00063000
+    INITIAL_STACK   def 0x0007FFFF
+    KERNEL_MEM      def 0x00080000
+    PT_END          def 0x00580000
+    POOL_REGION     def 0xC0000000
 
-    jmp_table def $
-    jmp_table_len def 2
-    dd 0 ; BIOS_print
-    dd 0 ; BIOS_sprint
+
+    ; pool sizes (entries) = 512 KiB
+    POOL8_SIZE      def 0x300
+    POOL32_SIZE     def 0x240
+    POOL64_SIZE     def 0x180
+    POOL128_SIZE    def 0x100
+    POOL256_SIZE    def 0x100
+    POOL1024_SIZE   def 0x70
+    POOL4096_SIZE   def 0x40
+
+    PAGE_SIZE       def 0x1000
+    POOL_SIZE       def 0x80000 ; in bytes
+
+
+    ; string definitions
+    int0_len def 22
+    int0_msg db "Division by zero error"
+
+    int1_len def 24
+    int1_msg db "Invalid opcode exception"
+
+    int4_len def 70
+    int4_msg db "Attempted to execute a privileged instruction in non-privileged space."
+
+    panic1_len def 43
+    panic1_msg db "Kernel panic: Unhandled exception interrupt"
+
+    init1_len def 19
+    init1_msg db "Early init complete"
+
+    ; struct type definitions
+    struct page_t
+        phy_addr dd
+
+        ; present: 1
+        ; kernel: 1
+        ; perms: 3
+        ; reserved: 4
+        params db
+    end_struct
+
+    struct idt_entry_t
+        addr dd
+
+        ; current iopl: 3
+        ; reserved: 5
+        params db
+    end_struct
+
+    struct hwinfo_t
+        mem_size dd
+    end_struct
+
+    ; must strictly be in this order
+    struct regs_t
+        sp dd
+        d dd
+        c dd
+        b dd
+        a dd
+        int_no db
+        err_code db
+        flags dw
+        ip dd
+    end_struct
+
+    
+    ; struct definitions
+    hwinfo ds hwinfo_t
+    page ds page_t
+    idt_entry ds idt_entry_t
+    regs ds regs_t
+
+
+    ; variable addresses
+    FBM_END dd 0 ; frame bitmap end
+    INT_END dd 0 ; interrupt handler table end
+    
+    POOL8_END       dd 0
+    POOL32_END      dd 0
+    POOL64_END      dd 0
+    POOL128_END     dd 0
+    POOL256_END     dd 0
+    POOL1024_END    dd 0
+    POOL4096_END    dd 0
+
 
 section .code
-int80_handler:
+
+; @params: none
+; @return: a = physical address
+; @clobbers: a, b, c, d
+alloc_frame:
+    pusha
+    mov a, PT_END
+
+alloc_frame_loop:
+    movd b, [FBM_END]
+    cmp a, b
+    jge no_frames
+
+    movd b, [a]
+    cmp b, 0xFFFFFFFF ; check if all bits are set
+    jne alloc_frame_found
+
+    add a, 4
+    jmp alloc_frame_loop
+
+alloc_frame_found:
+    push a
+
+    ; logic: ~(b & (1 << a)) == 1 -> found
+    mov a, 0
+    mov c, b
+    mov d, 1
+
+    lsh d, a ; d << a
+    and c, d ; c &= d
+    add a, 1
+
+    cmp c, 0
+    jnz $-60
+
+    ; set bit
+    pop c ; pop old a value to c
+    or b, d
+    movd [c], b
+
+    sub a, 1 ; rightmost unset bit
+    mov b, 31
+    sub b, a ; b = 31 - a
+
+    sub c, PT_END
+
+    ; c -> byte index, b -> bit index
+    ; PA = 8*4096*c + 4096*b
+    mul c, 0x8000
+    mul b, 0x1000
+
+    add c, b
+    mov r0, c ; popa doesn't pop r0
+
+    popa
+    mov a, r0
+    mov r0, 0
+
+    ret
+
+no_frames:
+    popa
+    mov a, 0
+
+    ret
+
+
+; @params: a = VA, b = kernel
+; @return: a = 0 success, a = 1 page already exists
+; @clobbers: a, b, c, d
+alloc_page:
     pusha
 
-    mul a, 4
+    div PAGE_SIZE ; floor division, will automatically align to page size KiB
+    
+    ; calculate address of page entry
+    mul a, #page_t
+    add a, KERNEL_MEM ; page table lives at the start of kernel data
+    movs [page], [a]
 
-    cmp a, jmp_table_len
-    jl [jmp_table + a]
+    movb c, [page.params]
+    and c, 0b10000000 ; present bit 
 
-    mov a, 0xFFFFFFFF ; error
+    cmp c, 0
+    jnz alloc_page_exists
+
+    mov d, a
+    call alloc_frame
+
+    movd [page.phy_addr], a
+    mov a, 0b10000000
+    lsh b, 7
+    or a, b
+    movb [page.params], a
+
+    movs [d], [page]
 
     popa
+    mov a, 0
+    ret
+
+alloc_page_exists:
+    mov a, 1
+    ret
+
+
+; @params: a = interrupt number, b = handler address
+; @return: a = 0 success, a = 1 error
+; @clobbers: a
+set_idt_entry:
+    cmp a, 0x80 ; cannot overwrite the bios interrupt
+    je set_idt_entry_error
+
+    pusha
+    mul a, #idt_entry_t
+    add a, IDT_ADDR
+
+    movd [idt_entry.addr], b
+    movb [idt_entry.params], 0b00100000 ; iopl = 1
+    movs [a], [idt_entry]
+
+    popa
+    mov a, 0
+    ret
+
+set_idt_entry_error:
+    mov a, 1
+    ret
+
+
+int00:
+    cli
+    push 0x00 ; int_no
+    jmp int_common_stub
+
+int01:
+    cli
+    push 0x01
+    jmp int_common_stub
+
+int02:
+    cli
+    push 0x02
+    jmp int_common_stub
+
+int03:
+    cli
+    push 0x03
+    jmp int_common_stub
+
+int04:
+    cli
+    push 0x04
+    jmp int_common_stub
+
+int05:
+    dump
+    end
+    cli
+    push 0x05
+    jmp int_common_stub
+
+int06:
+    cli
+    push 0x06
+    jmp int_common_stub
+
+int07:
+    cli
+    push 0x07
+    jmp int_common_stub
+
+int08:
+    cli
+    push 0x08
+    jmp int_common_stub
+
+int09:
+    cli
+    push 0x09
+    jmp int_common_stub
+
+int0a:
+    cli
+    push 0x0a
+    jmp int_common_stub
+
+int0b:
+    cli
+    push 0x0b
+    jmp int_common_stub
+
+int0c:
+    cli
+    push 0x0c
+    jmp int_common_stub
+
+int0d:
+    cli
+    push 0x0d
+    jmp int_common_stub
+
+int0e:
+    cli
+    push 0x0e
+    jmp int_common_stub
+
+int0f:
+    cli
+    push 0x0f
+    jmp int_common_stub
+
+int10:
+    cli
+    push 0x10
+    jmp int_common_stub
+
+int11:
+    cli
+    push 0x11
+    jmp int_common_stub
+
+int12:
+    cli
+    push 0x12
+    jmp int_common_stub
+
+int13:
+    cli
+    push 0x13
+    jmp int_common_stub
+
+int14:
+    cli
+    push 0x14
+    jmp int_common_stub
+
+int15:
+    cli
+    push 0x15
+    jmp int_common_stub
+
+int16:
+    cli
+    push 0x16
+    jmp int_common_stub
+
+int17:
+    cli
+    push 0x17
+    jmp int_common_stub
+
+int18:
+    cli
+    push 0x18
+    jmp int_common_stub
+
+int19:
+    cli
+    push 0x19
+    jmp int_common_stub
+
+int1a:
+    cli
+    push 0x1a
+    jmp int_common_stub
+
+int1b:
+    cli
+    push 0x1b
+    jmp int_common_stub
+
+int1c:
+    cli
+    push 0x1c
+    jmp int_common_stub
+
+int1d:
+    cli
+    push 0x1d
+    jmp int_common_stub
+
+int1e:
+    cli
+    pushb 0x1e
+    jmp int_common_stub
+
+int1f:
+    cli
+    pushb 0x1f
+    jmp int_common_stub
+
+int20:
+    cli
+    push 0      ; err_code
+    push 0x20   ; int_no
+    jmp int_common_stub
+
+
+int_common_stub:
+    pusha
+    push sp
+
+    call int_handler
+    add sp, 4 ; discard pushed sp
+
+    popa
+    add sp, 8 ; discard pushed error code and interrupt number
     iret
+
+int_handler:
+    add sp, 5 ; 1 byte + pushed ip by call int_handler
+    movs [regs], [sp]
+    sub sp, 5
+
+    movb a, [regs.int_no]
+    mul a, 4                ; get offset
+    addd a, [FBM_END]       ; get address
+    movd b, [a]             ; dereference the address
+
+    cmp b, 0
+    jz int_handler_0 ; unhandled interrupt
+
+    call b
+    ret
+
+int_handler_0:
+    ; check if interrupt is an exception
+    cmp a, 0x1F
+    jle int_handler_panic
+
+    ret ; unhandled IRQs don't cause a kernel panic
+
+int_handler_panic:
+    ; bios return address
+    mov sp, INITIAL_STACK-4
+
+    mov a, 0
+    mov b, panic1_msg
+    mov c, panic1_len
+    int 0x80
+
+    ret ; pops the return ip bios pushed when kernel entry was called
+
 
 main:
-    cli
-
-    lidt IDT_ADDR ; setup default idt
-    movd [IDT_ADDR + 0x280], int80_handler ; int 0x80
-    movd [IDT_ADDR + 0x284], 0 ; iopl = 0
-
-    mov sp, INITIAL_STACK
-
-    ; set the IOPL to 1 before jumping to kernel
-    setf 0b0010000
-
-    call KERN_START
-    end
-
-
-; b = msg, c = len
-BIOS_print:
-    mul c, 2
-    mov d, VIDEO_BUFF
-    add c, VIDEO_BUFF
-
-print_internal:
-    movb [d], [b]
-
-    add d, 1
-    movb [d], 0x07 ; white
-
-    add b, 1
-    add d, 1
-
-    cmp d, c
-    jge end_print
-    jmp print_internal
-
-end_print:
-    in 0x0200, 0 ; update screen
-
-    popa
-    iret
-
-; b = msg, c = len
-BIOS_sprint:
-    in 0x0100, [b]
+    ; read hwinfo from bios data start
+    mov a, BIOS_MEM
+    movs [hwinfo], [a]
+    movd a, [hwinfo.mem_size]
+    div 4 ; get memory size in pages
+    div 8 ; get frame table size in bytes
     
-    add b, 1
-    sub c, 1
-    cmp c, 0
-    jnz BIOS_sprint
+    cmp d, 0 ; remainder has to be 0
+    sz
 
-    popa
-    iret
+    ; set frame table end
+    add a, PT_END
+    movd [FBM_END], a
+
+    ; the first 4096 frames are already allocated
+    ; the frame entry width is 1 bit so the initial frame table is 512 bytes
+    mov c, PT_END
+
+loop_ft_1:
+    cmp c, PT_END+512
+    jge main_1
+
+    movd [c], 0xFFFFFFFF
+    add c, 4
+    jmp loop_ft_1
+
+main_1:
+    ; the other frames are unused so no need to allocate them
+
+    mov c, 0 ; interrupt number
+    mov d, 0 ; function offset = int * 30
+
+set_int_handlers:
+    cmp c, 0x1F
+    jg main_2
+
+    mov a, c
+    mov b, int00+d
+    call set_idt_entry
+    
+    cmp a, 0
+    sz ; assert a == 0
+
+    add c, 1
+    add d, 30
+
+    jmp set_int_handlers
+
+main_2:
+    ; allocate pool pages
+    mov a, POOL_SIZE
+    div PAGE_SIZE
+
+    ; pool size must be an integer multiple of the page size
+    cmp d, 0
+    sz
+
+    mov c, a ; number of pages to allocate
+    xor d, d ; current page
+    mul c, PAGE_SIZE
+
+    ; alloc_page parameters
+    xor a, a
+    mov b, 1 ; kernel page
+
+; allocate pages
+pool_stage1:
+    cmp d, c
+    jge pool_stage2
+
+    mov a, d
+    add a, POOL_REGION
+    call alloc_page
+
+    cmp a, 0
+    sz
+
+    add d, PAGE_SIZE
+    jmp pool_stage1
+
+; write "next free block" values and set addresses
+pool_stage2:
+    mov a, POOL_REGION
+
+    mov b, POOL8_SIZE
+    mul b, 8
+    add a, b
+    movd [POOL8_END], a
+
+    mov b, POOL32_SIZE
+    mul b, 32
+    add a, b
+    movd [POOL32_END], a
+
+    mov b, POOL64_SIZE
+    mul b, 64
+    add a, b
+    movd [POOL64_END], a
+
+    mov b, POOL128_SIZE
+    mul b, 128
+    add a, b
+    movd [POOL128_END], a
+
+    mov b, POOL256_SIZE
+    mul b, 256
+    add a, b
+    movd [POOL256_END], a
+
+    mov b, POOL1024_SIZE
+    mul b, 1024
+    add a, b
+    movd [POOL1024_END], a
+
+    mov b, POOL4096_SIZE
+    mul b, 4096
+    add a, b
+    movd [POOL4096_END], a
+
+    pushw POOL4096_SIZE
+    pushw 4096
+    pushw POOL1024_SIZE
+    pushw 1024
+    pushw POOL256_SIZE
+    pushw 256
+    pushw POOL128_SIZE
+    pushw 128
+    pushw POOL64_SIZE
+    pushw 64
+    pushw POOL32_SIZE
+    pushw 32
+    pushw POOL8_SIZE
+    pushw 8
+
+    xor c, c ; loop 1 counter
+    xor d, d ; loop 2 counter
+
+; iterates through all pools
+pool_stage2_loop1:
+    cmp c, 7
+    jge early_init_done
+
+    popw a ; pool block size
+    popw b ; pool capacity (number of blocks)
+
+    push c
+    push b
+
+    mul c, 4
+    add c, POOL8_END ; get address of symbol
+    movd c, [c] ; get end address of current pool
+    mul b, a ; get pool size in bytes
+    sub c, b ; get start address
+
+    pop b
+    call pool_stage2_loop2
+    pop c
+
+    add c, 1
+    jmp pool_stage2_loop1
+
+; iterates through all blocks
+pool_stage2_loop2:
+    cmp d, b
+    je pool_stage2_loop2_end
+    sl ; assert d < b
+
+    push b
+    mov b, d
+    mul b, a ; offset in pool
+    add b, c ; global memory address
+
+    movw [b], d+1 ; write the offset of the next block
+    pop b
+
+    add d, 1
+    jmp pool_stage2_loop2
+
+pool_stage2_loop2_end:
+    ; set the last block to 0xFFFF
+    sub d, 1
+    mul d, a ; offset of last block
+
+    movw [d], 0xFFFF
+    xor d, d
+
+    ret
+
+
+early_init_done:
+    mov a, 0
+    mov b, init1_msg
+    mov c, init1_len
+    int 0x80
+
+    end
