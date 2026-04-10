@@ -41,6 +41,7 @@ The goal of this project is to create a functional operating system using the `c
 + `[addr]`: Memory dereference
 + `addr+10`: Symbolic reference (strictly in bytes)
 + `instruction[x]`: Any width variant
++ `instruction[s]`: Any conditional statement (identical to NASM's conditional jump instruction suffixes)
 + `#s`: Size of struct `s`
 + A semicolon is used to denote a comment.
 
@@ -325,14 +326,7 @@ Notice how the instruction at address `0x1000` which is `jmp <main+0>` (or `jmp 
 | 0x02 | ADD | Addition between the 2 operands: `op1 += op2` |
 | 0x03 | MOV | Moves the second operand to the first: `op1 <- op2` |
 | 0x04 | CMP | Compares the first operand with the second and sets the `flags` register accordingly |
-| 0x05 | JZ | Jumps to `op1` if the zero bit is set in `flags` |
-| 0x06 | JNZ | Jumps to `op1` if the zero bit is __not__ set in `flags` |
-| 0x07 | JE | Jumps to `op1` if the equal bit is set |
-| 0x08 | JNE | Jumps to `op1` if the equal bit is __not__ set |
-| 0x09 | JG | Jumps to `op1` if the greater bit is set |
-| 0x0A | JGE | Jumps to `op1` if the greater or the equal bit is set |
-| 0x0B | JL | Jumps to `op1` if none of the comparison bits are set |
-| 0x0C | JLE | Jumps to `op1` if none of the comparison bits are set or if the equal bit is set |
+| 0x05-0x0C | J[s] | Jumps to `op1` if given condition is true in the flags register |
 | 0x0D | PUSH | Pushes `op1` to the stack |
 | 0x0E | POP | Pops the last stack value into `op1`. `op1` cannot be an immediate integer |
 | 0x0F | CALL | Pushes the current `ip` into the stack and jumps to `op1` |
@@ -349,6 +343,8 @@ Notice how the instruction at address `0x1000` which is `jmp <main+0>` (or `jmp 
 | 0x1C | PUSHA | Pushes all general purpose registers in the following order: `a, b, c, d` | 
 | 0x1D | POPA | Pops the first 16 bytes of the stack into the general purpose registers in the following order: `d, c, b, a` |
 | 0x24 | MOVS | Reads/writes a struct from memory (section `3b`) |
+| 0x25 | LPT | Loads a page table from the given address |
+| 0x26-0x2D | S[s] | If the given condition is false in `flags` interrupt `0x06` is invoked (assertion failure) |
 
 Note: Any instruction involving memory operations must encode width specifically (i.e. `mov` doesn't allow memory operations, `movd` does)
 
@@ -402,6 +398,7 @@ main:
 | 0x03 | E | Out of bounds exception |
 | 0x04 | E | Privilege exception |
 | 0x05 | E | Page fault |
+| 0x06 | E | Assertion failure |
 | 0x20 | I | Timer interrupt |
 | 0x80 | I | BIOS interrupt |
 <br>
