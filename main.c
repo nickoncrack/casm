@@ -46,24 +46,27 @@ uint16_t flags;
 
 void handle_interrupt(uint8_t n, uint8_t e);
 
-page_t *get_page(uint32_t va) {
+page_t get_page(uint32_t va) {
     uint32_t idx = va / PAGE_SIZE;
-    page_t *page = (page_t *)(memory + pta + idx * sizeof(page_t));
+    page_t *ptr = (page_t *)(memory + pta + idx * sizeof(page_t));
+    page_t page = *ptr;
 
-    if (!page->present) {
+    page.physical_addr = __builtin_bswap32(page.physical_addr);
+
+    if (!page.present) {
         handle_interrupt(E_PAGE, E_PAGE_PRESENT);
-        return NULL;
+        page.physical_addr = 0;
     }
     return page;
 }
 
 uint32_t VA_TO_PA(uint32_t va) {
     uint32_t off = va % PAGE_SIZE;
-    page_t *page = get_page(va);
+    page_t page = get_page(va);
 
-    if (page == NULL) return 0;
+    if (page.physical_addr == 0) return 0;
 
-    return page->physical_addr + off;
+    return page.physical_addr + off;
 }
 
 void PUSHD(uint32_t op) {
@@ -159,6 +162,7 @@ void MEM_WRITEB(uint32_t addr, uint8_t src) {
 void MEM_WRITEW(uint32_t addr, uint16_t src) {
     memory[VA_TO_PA(addr+0)] = src >> 8;
     memory[VA_TO_PA(addr+1)] = src & 0xFF;
+
     return;
 }
 
@@ -185,14 +189,14 @@ uint32_t MEM_READD(uint32_t addr) {
 // fetch instruction bytes
 uint8_t MEM_FETCH(uint32_t addr) {
     uint32_t off = addr % PAGE_SIZE;
-    page_t *page = get_page(addr);
+    page_t page = get_page(addr);
 
-    if (~page->perms & PAGE_X) {
+    if (~page.perms & PAGE_X) {
         handle_interrupt(E_PAGE, E_PAGE_PERM_FAULT);
         return 0;
     }
 
-    return memory[page->physical_addr + off];
+    return memory[page.physical_addr + off];
 }
 
 uint8_t exec() {
@@ -724,6 +728,8 @@ int main() {
     pta = KERNEL_DATA;
     for (uint32_t i = 1; i < INITIAL_PT_SIZE; i++) {
         page.physical_addr = i * PAGE_SIZE; // identity mapping
+        page.physical_addr = __builtin_bswap32(page.physical_addr);
+
         if (1 <= i && i <= 32)          page.perms = PAGE_R | PAGE_X;
         else if (33 <= i && i <= 97)    page.perms = PAGE_R | PAGE_W | PAGE_X;
         else if (98 <= i && i <= 100)   page.perms = PAGE_W;
@@ -812,6 +818,12 @@ int main() {
     double delta = (stop - start) / clocks_per_ms;
 
     printf("Instructions executed: %lu\nDelta: %lf ms\n", cnt, delta);
+
+    #ifdef DEBUG
+    f = fopen("memdump.bin", "wb+");
+    size_t size = fwrite(memory, 1024, MEMORY_SIZE_KB, f);
+    fclose(f);
+    #endif
 
     free(memory);
     printf("Execution completed.\n");
