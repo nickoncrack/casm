@@ -1,4 +1,4 @@
-entry 0x00021000
+    entry 0x00021000
 
 section .data
     ; constant addresses
@@ -20,7 +20,7 @@ section .data
     POOL4096_SIZE   def 0x40
 
     PAGE_SIZE       def 0x1000
-    POOL_SIZE       def 0x80000 ; in bytes
+    POOL_SIZE       def 0x80000 ; 128 pages
 
 
     ; string definitions
@@ -195,7 +195,7 @@ alloc_page:
     movs [d], [page]
 
     popa
-    mov a, 0
+    movd a, [page.phy_addr] ; test
     ret
 
 alloc_page_exists:
@@ -253,8 +253,6 @@ int04:
     jmp int_common_stub
 
 int05:
-    dump
-    end
     cli
     push 0x05
     jmp int_common_stub
@@ -517,9 +515,6 @@ pool_stage1:
     add a, POOL_REGION
     call alloc_page
 
-    cmp a, 0
-    sz
-
     add d, PAGE_SIZE
     jmp pool_stage1
 
@@ -577,65 +572,46 @@ pool_stage2:
     pushw POOL8_SIZE
     pushw 8
 
-    xor c, c ; loop 1 counter
-    xor d, d ; loop 2 counter
+    mov a, POOL_REGION  ; current address
+    xor c, c            ; loop counter
 
-; iterates through all pools
-pool_stage2_loop1:
-    cmp c, 7
+; iterate through all pools
+pool_loop1:
+    cmp c, 7 ; npools
     jge early_init_done
 
-    popw a ; pool block size
-    popw b ; pool capacity (number of blocks)
+    popw b ; pool block size
+    popw d ; pool size in blocks
 
-    push c
-    push b
-
-    mul c, 4
-    add c, POOL8_END ; get address of symbol
-    movd c, [c] ; get end address of current pool
-    mul b, a ; get pool size in bytes
-    sub c, b ; get start address
-
-    pop b
-    call pool_stage2_loop2
+    push c ; only the loop counter needs to be restored
+    mov c, 1 ; inner loop counter
+    call pool_loop2
     pop c
 
     add c, 1
-    jmp pool_stage2_loop1
+    add a, b ; go to pool end
+    jmp pool_loop1
 
-; iterates through all blocks
-pool_stage2_loop2:
-    cmp d, b
-    je pool_stage2_loop2_end
-    sl ; assert d < b
+; iterate through all blocks
+pool_loop2:
+    cmp c, d
+    jg pool_loop2_end
 
-    push b
-    mov b, d
-    mul b, a ; offset in pool
-    add b, c ; global memory address
+    movw [a], c ; write next block index
 
-    movw [b], d+1 ; write the offset of the next block
-    pop b
+    add a, b
+    add c, 1
+    jmp pool_loop2
 
-    add d, 1
-    jmp pool_stage2_loop2
-
-pool_stage2_loop2_end:
-    ; set the last block to 0xFFFF
-    sub d, 1
-    mul d, a ; offset of last block
-
-    movw [d], 0xFFFF
-    xor d, d
+pool_loop2_end:
+    sub a, b            ; go to last block
+    movw [a], 0xFFFF    ; write last block
 
     ret
 
 
 early_init_done:
-    mov a, 0
-    mov b, init1_msg
-    mov c, init1_len
-    int 0x80
+    ; test
+    mdump POOL_REGION, 512
 
     end
