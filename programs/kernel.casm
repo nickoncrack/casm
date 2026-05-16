@@ -95,6 +95,15 @@ section .data
     POOL1024_END    dd 0
     POOL4096_END    dd 0
 
+    ; first available block
+    pool8_head      dw 0
+    pool32_head     dw 0
+    pool64_head     dw 0
+    pool128_head    dw 0
+    pool256_head    dw 0
+    pool1024_head   dw 0
+    pool4096_head   dw 0
+
 
 section .code
 
@@ -610,8 +619,267 @@ pool_loop2_end:
     ret
 
 
-early_init_done:
-    ; test
-    mdump POOL_REGION, 512
+; @params: a = allocation size
+; @return: a = address
+; @clobbers: a, c
+kmalloc:
+    push c
 
+    cmp a, 8
+    jle __kmalloc_8
+
+    cmp a, 32
+    jle __kmalloc_32
+
+    cmp a, 64
+    jle __kmalloc_64
+
+    cmp a, 128
+    jle __kmalloc_128
+
+    cmp a, 256
+    jle __kmalloc_256
+
+    cmp a, 1024
+    jle __kmalloc_1024
+
+    cmp a, 4096
+    jle __kmalloc_4096
+
+    ; request size too large
+    xor a, a
+
+    pop c
+    ret
+
+__kmalloc_8:
+    movw a, [pool8_head]
+    cmp a, 0xFFFF
+    je __kmalloc_no_available_blocks
+
+    mul a, 8            ; offset in pool
+    add a, POOL_REGION  ; global address
+    movw c, [a]         ; next free block
+    movw [pool8_head], c ; update head
+
+    pop c
+    ret
+
+__kmalloc_32:
+    movw a, [pool32_head]
+    cmp a, 0xFFFF
+    je __kmalloc_no_available_blocks
+
+    mul a, 32
+    addd a, [POOL8_END]
+    movw c, [a]
+    movw [pool32_head], c
+
+    pop c
+    ret
+
+__kmalloc_64:
+    movw a, [pool64_head]
+    cmp a, 0xFFFF
+    je __kmalloc_no_available_blocks
+
+    mul a, 64
+    addd a, [POOL32_END]
+    movw c, [a]
+    movw [pool32_head], c
+
+    pop c
+    ret
+
+__kmalloc_128:
+    movw a, [pool128_head]
+    cmp a, 0xFFFF
+    je __kmalloc_no_available_blocks
+
+    mul a, 128
+    addd a, [POOL64_END]
+    movw c, [a]
+    movw [pool128_head], c
+
+    pop c
+    ret
+
+__kmalloc_256:
+    movw a, [pool256_head]
+    cmp a, 0xFFFF
+    je __kmalloc_no_available_blocks
+
+    mul a, 256
+    addd a, [POOL128_END]
+    movw c, [a]
+    movw [pool256_head], c
+
+    pop c
+    ret
+
+__kmalloc_1024:
+    movw a, [pool1024_head]
+    cmp a, 0xFFFF
+    je __kmalloc_no_available_blocks
+
+    mul a, 1024
+    addd a, [POOL256_END]
+    movw c, [a]
+    movw [pool1024_head], c
+
+    pop c
+    ret
+
+__kmalloc_4096:
+    movw a, [pool4096_head]
+    cmp a, 0xFFFF
+    je __kmalloc_no_available_blocks
+
+    mul a, 4096
+    addd a, [POOL1024_END]
+    movw c, [a]
+    movw [pool4096_head], c
+
+    pop c
+    ret
+
+__kmalloc_no_available_blocks:
+    mov a, 0xFFFFFF
+    ret
+
+
+; @params: a = address
+; @return: a = 0 success, a = 1 out of bounds
+; @clobbers: a, b, d
+kfree:
+    ; check if address is within bounds
+    cmp a, POOL_REGION
+    jl __kfree_oob
+    cmpd a, [POOL4096_END]
+    jge __kfree_oob
+
+    push b
+    push d
+    mov b, a ; save address
+
+    cmpd a, [POOL8_END]
+    jl __kfree_8
+
+    cmpd a, [POOL32_END]
+    jl __kfree_32
+
+    cmpd a, [POOL64_END]
+    jl __kfree_64
+
+    cmpd a, [POOL128_END]
+    jl __kfree_128
+
+    cmpd a, [POOL256_END]
+    jl __kfree_256
+
+    cmpd a, [POOL1024_END]
+    jl __kfree_1024
+
+    cmpd a, [POOL4096_END]
+    jl __kfree_4096
+
+    ; should never reach this point
+    pop d
+    pop b
+    mov a, 0xFFFFFFFF
+    ret
+
+__kfree_8:
+    ; calculate block index
+    sub a, POOL_REGION
+    div 8
+
+    sub b, d ; base block index in case a mod POOL_REGION = 0
+    movw [b], [pool8_head] ; write next free block
+    movw [pool8_head], a ; block freed is marked as next free block
+
+    jmp __kfree_end
+
+__kfree_32:
+    subd a, [POOL8_END]
+    div 32
+
+    sub b, d
+    movw [b], [pool32_head]
+    movw [pool32_head], a
+    jmp __kfree_end
+
+__kfree_64:
+    subd a, [POOL32_END]
+    div 64
+
+    sub b, d
+    movw [b], [pool64_head]
+    movw [pool64_head], a
+    jmp __kfree_end
+
+__kfree_128:
+    subd a, [POOL64_END]
+    div 128
+
+    sub b, d
+    movw [b], [pool128_head]
+    movw [pool128_head], a
+    jmp __kfree_end
+
+__kfree_256:
+    subd a, [POOL128_END]
+    div 256
+
+    sub b, d
+    movw [b], [pool256_head]
+    movw [pool256_head], a
+    jmp __kfree_end
+
+__kfree_1024:
+    subd a, [POOL256_END]
+    div 1024
+
+    sub b, d
+    movw [b], [pool1024_head]
+    movw [pool1024_head], a
+    jmp __kfree_end
+
+__kfree_4096:
+    subd a, [POOL1024_END]
+    div 4096
+
+    sub b, d
+    movw [b], [pool4096_head]
+    movw [pool4096_head], a
+    jmp __kfree_end
+
+__kfree_oob:
+    mov a, 1
+    ret
+
+__kfree_end:
+    pop d
+    pop b
+    xor a, a
+    ret
+
+
+early_init_done:
+    mov a, 8
+    call kmalloc
+    mdump 0xC0000000, 8
+
+    movd [a], 0xFFFFFFFF
+    add a, 4
+    movd [a], 0xFFFFFFFF
+    mdump 0xC0000000, 8
+
+    call kfree
+    mdump 0xC0000000, 8
+
+    mov a, 8
+    call kmalloc
+
+    dump
     end
