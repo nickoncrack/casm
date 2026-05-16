@@ -434,7 +434,7 @@ Page permissions:
 
 Note: Here X does not imply R, architecturally it does since its the same operation, but a page with X and not R cannot be read from the kernel using the `mov` instructions
 
-### 5b. Initial memory structure
+### 5b. Memory structure
 This memory structure is temporary and is set up by the CPU after reset. It is standard practice that the kernel copies these mappings into the expanded page table and leave them as is.
 <br>
 
@@ -445,10 +445,13 @@ This memory structure is temporary and is set up by the CPU after reset. It is s
 | `0x00021000` | 256 KiB | RWX | Kernel binary |
 | `0x00061000` | 8 KiB | W | Text video buffer |
 | `0x00063000` | 4 KiB | RWX | Interrupt descriptor table |
-| `0x00064000` | 112 KiB | RWX | Stack |
+| `0x00064000` | 112 KiB | RWX | Initial stack |
 | `0x00080000` | 15872 KiB | RW | Kernel memory |
 
 + The initial mapped memory is 16 MiB and not less as it needs to be large enough to host a page table for the entire address space (~5 MiB) and other data structures required for initializing the kernel. 
+
+### 5c. Memory allocation
+Despite its obvious disadvantages, the kernel uses a pool allocator, as it is the easiest to implement in pure assembly. The allocator consists of multiple pools with block sizes: 8, 32, 64, 128, 256, 1024 and 4096 bytes.
 
 ## 6. I/O Ports
 The processor communicates with external hardware devices using the `in` and `out` instructions (i.e. `inb`, `outb`)
