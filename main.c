@@ -285,27 +285,40 @@ uint8_t exec() {
             }
         }
 
-        case CMP: { // 1 cycle
+        case CMP: { // 2 cycles
+            SET_TMP1;
             SET_TMP2;
+
+            uint32_t val1, val2;
+
+            switch (prefix & WIDTH_MASK) {
+                case PRE_BASE: {
+                    val1 = temp1;
+                    val2 = temp2;
+                }
+
+                __CMP(B);
+                __CMP(W);
+                __CMP(D);
+            }
 
             flags &= ~ZERO_FLAG;
             flags &= ~EQUAL_FLAG;
             flags &= ~GREATER_FLAG;
-
-            if (registers[reg1] == 0) {
+            if (val1 == 0) {
                 flags |= ZERO_FLAG;
-                if (temp2 == 0) flags |= EQUAL_FLAG;
-                return 1;
-            }
-
-            if (registers[reg1] > temp2) {
+                if (val2 == 0) flags |= EQUAL_FLAG;
+                return 2;
+            } else if (val1 > val2) {
                 flags |= GREATER_FLAG;
-            } else if (registers[reg1] == temp2) {
+                return 2;
+            } else if (val1 == val2) {
                 flags |= EQUAL_FLAG;
+                return 2;
             }
 
-            // reg1 < reg2
-            return 1;
+            // val1 < val2
+            return 2;
         }
 
         case JZ: { // 1 cycle
@@ -817,7 +830,7 @@ int main() {
     stop = clock();
     double delta = (stop - start) / clocks_per_ms;
 
-    printf("Instructions executed: %lu\nDelta: %lf ms\n", cnt, delta);
+    printf("Instructions executed: %llu\nDelta: %lf ms\n", cnt, delta);
 
     #ifdef DEBUG
     f = fopen("memdump.bin", "wb+");
