@@ -17,7 +17,7 @@
     "cmp": {
         "op": 4,
         "operands": ["reg", "any"],
-        "variableMemoryWidth": false
+        "variableMemoryWidth": true
     },
     "jz": {
         "op": 5,
