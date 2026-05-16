@@ -37,7 +37,7 @@
 // conditional jump check negated condition
 #define JMP_NCOND_CHECK(cond) \
     SET_TMP1; \
-    if (~flags & (cond)) { \
+    if (!(flags & (cond))) { \
         if (!(prefix & PRE_PTR1)) { \
             ip = temp1 - INSTRUCTION_SIZE; \
             return 1; \
