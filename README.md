@@ -2,11 +2,11 @@
 The goal of this project is to create a functional operating system using the `casm` instruction set which is defined in this project, therefore, this repository does not contain only the emulator and the assembler for the `casm` instruction set, but also other vital components of an operating system such as a BIOS implementation, a kernel, a file system, etc.
 
 ## TODOs
-+ Optimize renderer by marking modified regions as dirty
-+ Finish the pool allocator implementation (kmalloc, free)
-+ Add file including support in the assembler (very important)
++ ~~Add a complete pool allocator implementation (kmalloc, kfree)~~
++ Add file including and macros in the assembler.
 + Add a minimal file system which allows parsing a root directory and reading files.
 + Switch to a second stage bootloader.
++ Optimize renderer by marking modified regions as dirty
 
 ## Benchmarks
 ### Current early kernel init
