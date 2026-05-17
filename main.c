@@ -60,6 +60,9 @@ page_t get_page(uint32_t va) {
     return page;
 }
 
+uint32_t tlb_vp[1024];
+uint32_t tlb_pp[1024];
+
 uint32_t VA_TO_PA(uint32_t va) {
     uint32_t off = va % PAGE_SIZE;
     page_t page = get_page(va);
@@ -69,11 +72,26 @@ uint32_t VA_TO_PA(uint32_t va) {
     return page.physical_addr + off;
 }
 
+uint32_t VA_TO_PA_FAST(uint32_t va) {
+    uint32_t vp = va & 0xFFFFF000;
+    uint32_t idx = (vp >> 12) & 0x3FF;
+
+    if (tlb_vp[idx] == vp) {
+        return tlb_pp[idx] | (va & 0xFFF);
+    }
+
+    uint32_t pa = VA_TO_PA(va);
+    tlb_vp[idx] = va;
+    tlb_pp[idx] = pa & 0xFFFFF000;
+
+    return pa;
+}
+
 void PUSHD(uint32_t op) {
-    memory[VA_TO_PA(sp-0)] = (op >> 0x00) & 0xFF;
-    memory[VA_TO_PA(sp-1)] = (op >> 0x08) & 0xFF;
-    memory[VA_TO_PA(sp-2)] = (op >> 0x10) & 0xFF;
-    memory[VA_TO_PA(sp-3)] = (op >> 0x18) & 0xFF;
+    memory[VA_TO_PA_FAST(sp-0)] = (op >> 0x00) & 0xFF;
+    memory[VA_TO_PA_FAST(sp-1)] = (op >> 0x08) & 0xFF;
+    memory[VA_TO_PA_FAST(sp-2)] = (op >> 0x10) & 0xFF;
+    memory[VA_TO_PA_FAST(sp-3)] = (op >> 0x18) & 0xFF;
 
     sp -= OPERAND_SIZE;
     registers[REGISTER_SP] -= OPERAND_SIZE;
@@ -81,8 +99,8 @@ void PUSHD(uint32_t op) {
 }
 
 void PUSHW(uint16_t op) {
-    memory[VA_TO_PA(sp-0)] = (op >> 0x00) & 0xFF;
-    memory[VA_TO_PA(sp-1)] = (op >> 0x08) & 0xFF;
+    memory[VA_TO_PA_FAST(sp-0)] = (op >> 0x00) & 0xFF;
+    memory[VA_TO_PA_FAST(sp-1)] = (op >> 0x08) & 0xFF;
 
     sp -= 2;
     registers[REGISTER_SP] -= 2;
@@ -90,7 +108,7 @@ void PUSHW(uint16_t op) {
 }
 
 void PUSHB(uint8_t op) {
-    memory[VA_TO_PA(sp)] = op;
+    memory[VA_TO_PA_FAST(sp)] = op;
     
     sp--;
     registers[REGISTER_SP]--;
@@ -98,7 +116,7 @@ void PUSHB(uint8_t op) {
 }
 
 void POPD(uint32_t *dst) {
-    memcpy(dst, &memory[VA_TO_PA(sp+1)], OPERAND_SIZE);
+    memcpy(dst, &memory[VA_TO_PA_FAST(sp+1)], OPERAND_SIZE);
     *dst = __builtin_bswap32(*dst);
 
     sp += OPERAND_SIZE;
@@ -107,7 +125,7 @@ void POPD(uint32_t *dst) {
 }
 
 void POPW(uint16_t *dst) {
-    memcpy(dst, &memory[VA_TO_PA(sp+1)], 2);
+    memcpy(dst, &memory[VA_TO_PA_FAST(sp+1)], 2);
     *dst = __builtin_bswap16(*dst);
 
     sp += 2;
@@ -116,7 +134,7 @@ void POPW(uint16_t *dst) {
 }
 
 void POPB(uint8_t *dst) {
-    memcpy(dst, &memory[VA_TO_PA(sp+1)], 1);
+    memcpy(dst, &memory[VA_TO_PA_FAST(sp+1)], 1);
     
     sp++;
     registers[REGISTER_SP]++;
@@ -132,10 +150,10 @@ void handle_interrupt(uint8_t n, uint8_t e) {
 
     if ((flags & INT_FLAG) || (n <= 0x1F) || pending_sw_int) { // if interrupts are enabled or n is an exception
 
-        uint32_t int_entry =(memory[VA_TO_PA(idt + n * INTERRUPT_HANDLER_SIZE + 0)] << 24) | \
-                            (memory[VA_TO_PA(idt + n * INTERRUPT_HANDLER_SIZE + 1)] << 16) | \
-                            (memory[VA_TO_PA(idt + n * INTERRUPT_HANDLER_SIZE + 2)] << 8) | \
-                            (memory[VA_TO_PA(idt + n * INTERRUPT_HANDLER_SIZE + 3)] << 0);
+        uint32_t int_entry =(memory[VA_TO_PA_FAST(idt + n * INTERRUPT_HANDLER_SIZE + 0)] << 24) | \
+                            (memory[VA_TO_PA_FAST(idt + n * INTERRUPT_HANDLER_SIZE + 1)] << 16) | \
+                            (memory[VA_TO_PA_FAST(idt + n * INTERRUPT_HANDLER_SIZE + 2)] << 8) | \
+                            (memory[VA_TO_PA_FAST(idt + n * INTERRUPT_HANDLER_SIZE + 3)] << 0);
 
         if (int_entry == 0x00 && n <= 0x1F) { // unhandled exception
             free(memory);
@@ -155,35 +173,43 @@ void handle_interrupt(uint8_t n, uint8_t e) {
 }
 
 void MEM_WRITEB(uint32_t addr, uint8_t src) {
-    memory[VA_TO_PA(addr)] = src;
+    memory[VA_TO_PA_FAST(addr)] = src;
     return;
 }
 
 void MEM_WRITEW(uint32_t addr, uint16_t src) {
-    memory[VA_TO_PA(addr+0)] = src >> 8;
-    memory[VA_TO_PA(addr+1)] = src & 0xFF;
+    memory[VA_TO_PA_FAST(addr+0)] = src >> 8;
+    memory[VA_TO_PA_FAST(addr+1)] = src & 0xFF;
 
     return;
 }
 
 void MEM_WRITED(uint32_t addr, uint32_t src) {
-    memory[VA_TO_PA(addr+0)] = src >> 24;
-    memory[VA_TO_PA(addr+1)] = (src >> 16) & 0xFF;
-    memory[VA_TO_PA(addr+2)] = (src >> 8) & 0xFF;
-    memory[VA_TO_PA(addr+3)] = src & 0xFF;
+    if ((addr & 0xFFF) <= 0xFFC) { // check if addr stays within the same page
+        uint32_t pa = VA_TO_PA_FAST(addr);
+        if (pa == 0) return;
+
+        *(uint32_t*)&memory[pa] = __builtin_bswap32(src);
+    } else {
+        // its faster to read byte by byte than checking which bytes are within the same page
+        MEM_WRITEB(addr, src >> 24);
+        MEM_WRITEB(addr, (src >> 16) & 0xFF);
+        MEM_WRITEB(addr, (src >> 8) & 0xFF);
+        MEM_WRITEB(addr, src & 0xFF);
+    }
 }
 
 uint8_t MEM_READB(uint32_t addr) {
-    return memory[VA_TO_PA(addr)];
+    return memory[VA_TO_PA_FAST(addr)];
 }
 
 uint16_t MEM_READW(uint32_t addr) {
-    return (memory[VA_TO_PA(addr)] << 8) | memory[VA_TO_PA(addr+1)];
+    return (memory[VA_TO_PA_FAST(addr)] << 8) | memory[VA_TO_PA_FAST(addr+1)];
 }
 
 uint32_t MEM_READD(uint32_t addr) {
-    return  (memory[VA_TO_PA(addr+0)] << 24) | (memory[VA_TO_PA(addr+1)] << 16) | \
-            (memory[VA_TO_PA(addr+2)] << 8) | memory[VA_TO_PA(addr+3)];
+    return  (memory[VA_TO_PA_FAST(addr+0)] << 24) | (memory[VA_TO_PA_FAST(addr+1)] << 16) | \
+            (memory[VA_TO_PA_FAST(addr+2)] << 8) | memory[VA_TO_PA_FAST(addr+3)];
 }
 
 // fetch instruction bytes
@@ -208,18 +234,25 @@ uint8_t exec() {
     printf("Executing instruction: IP=0x%08x, SP=0x%08x\n", ip, sp);
     #endif
 
-    uint8_t prefix = MEM_READB(ip + 0); // prefix or opcode high
-    uint8_t opcode = MEM_READB(ip + 1); // opcode low
+    uint8_t *iptr;
+    uint8_t ibuff[INSTRUCTION_SIZE];
 
-    uint32_t op1, op2;
+    // check if instruction is within the same page
+    if ((ip & 0xFFF) <= (0x1000 - INSTRUCTION_SIZE)) {
+        iptr = &memory[VA_TO_PA_FAST(ip)];
+    } else {
+        for (uint8_t i = 0; i < INSTRUCTION_SIZE; i++) {
+            ibuff[i] = MEM_READB(ip + i);
+        }
 
-    // copy 32 bit operand
-    memcpy(&op1, &memory[VA_TO_PA(ip + 2)], OPERAND_SIZE);
-    memcpy(&op2, &memory[VA_TO_PA(ip + 2 + OPERAND_SIZE)], OPERAND_SIZE);
+        iptr = ibuff;
+    }
 
-    // invert endianness (to big endian)
-    op1 = __builtin_bswap32(op1);
-    op2 = __builtin_bswap32(op2);
+    uint8_t prefix = iptr[0];
+    uint8_t opcode = iptr[1];
+
+    uint32_t op1 = __builtin_bswap32(*(uint32_t*)&iptr[2]);
+    uint32_t op2 = __builtin_bswap32(*(uint32_t*)&iptr[6]);
 
     // register value is placed at the least significat byte of the operand
     uint16_t operand1h = (op1 >> 16) & 0xFFFF;
