@@ -452,7 +452,7 @@ The following table contains a memory map after cpu reset, which remains unmodif
 + The initial mapped memory is 16 MiB and not less as it needs to be large enough to host a page table for the entire address space (~5 MiB) and other data structures required for initializing the kernel. 
 
 #### ii. Early init memory
-The following table contains data structures created by the kernel, before early init has been completed, that are within the kernel memory region.
+The following table contains data structures created by the kernel, before early init has been completed.
 
 | Start VA | Size | Description |
 | --- | --- | --- |
