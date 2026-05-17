@@ -10,18 +10,16 @@ The goal of this project is to create a functional operating system using the `c
 
 ## Benchmarks
 ### Current early kernel init
-+ 187500 instructions in ~6.5ms (no sdl window)
-+ 187500 instructions in ~13.3ms (with sdl window)
-+ 187500 instructions in 998~1162ms (debug)
++ 170116 instructions in ~3ms
++ 170116 instructions in 998~1162ms (debug)
 
 ### Minimal kernel init (interrupts and initial page table only)
-+ 1402 instructions in 0.06ms
-+ 1402 instructions in ~12ms (debug)
++ 1402 instructions in 0.04ms
++ 1402 instructions in ~8ms (debug)
 
 ### Projected long term performance
-+ 28.8M instructions/sec (no sdl window)
-+ 14.4M instructions/sec (with sdl window)
-+ 161000 instructions/sec (debug)
++ 56.7M instructions/sec
++ 162015 instructions/sec (debug)
 
 <sub>Current sdl renderer is not fully optimized</sub>
 
