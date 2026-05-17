@@ -435,8 +435,9 @@ Page permissions:
 Note: Here X does not imply R, architecturally it does since its the same operation, but a page with X and not R cannot be read from the kernel using the `mov` instructions
 
 ### 5b. Memory structure
-This memory structure is temporary and is set up by the CPU after reset. It is standard practice that the kernel copies these mappings into the expanded page table and leave them as is.
-<br>
+
+#### i. Pre-init memory
+The following table contains a memory map after cpu reset, which remains unmodified by the kernel.
 
 | Start VA | Size | Permissions | Description |
 | --- | --- | --- | --- |
@@ -449,6 +450,17 @@ This memory structure is temporary and is set up by the CPU after reset. It is s
 | `0x00080000` | 15872 KiB | RW | Kernel memory |
 
 + The initial mapped memory is 16 MiB and not less as it needs to be large enough to host a page table for the entire address space (~5 MiB) and other data structures required for initializing the kernel. 
+
+#### ii. Early init memory
+The following table contains data structures created by the kernel, before early init has been completed, that are within the kernel memory region.
+
+| Start VA | Size | Description |
+| --- | --- | --- |
+| `0x00080000` | 5120 KiB | Extended page table |
+| `0x00580000` | unknown | Memory frame bitmap |
+| `0xC0000000` | 512 KiB | Memory pool region |
+
++ The frame bitmap has unknown size as it depends on the memory size. For the default 64 MiB size, the frame bitmap length would be 2 KiB.
 
 ### 5c. Memory allocation
 Despite its obvious disadvantages, the kernel uses a pool allocator, as it is the easiest to implement in pure assembly. The allocator consists of multiple pools with block sizes: 8, 32, 64, 128, 256, 1024 and 4096 bytes.
