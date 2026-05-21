@@ -3,8 +3,8 @@
 #include <stdint.h>
 #include <stddef.h>
 
-#define SDL_WINDOW
-#define DEBUG
+// #define SDL_WINDOW
+// #define DEBUG
 #define SHOW_INT
 
 #define MEMORY_SIZE_KB 65536 // 64 MiB (max PA = 0x03FFFFFF)
@@ -71,6 +71,7 @@ typedef struct {
 #define E_OUT_OF_BOUNDS     0x03
 #define E_PRIVILEGE         0x04 // executing privileged instruction in non-privileged space
 #define E_PAGE              0x05 // accessing an invalid page (not present)
+#define E_ASSERTION         0x06 // assertion failure
 
 // exception error codes
 #define E_PRIVILEGE_IOPL    0b00000100 // instruction requires lower iopl (least 2 significant bits contain the faulting iopl)
