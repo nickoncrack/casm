@@ -48,6 +48,15 @@
 #define MOVS        0x24 // move struct
 #define LPT         0x25 // load page table
 
+#define SZ          0x26 // assert zero
+#define SNZ         0x27 // assert not zero
+#define SE          0x28 // assert equal
+#define SNE         0x29 // assert not equal
+#define SG          0x2A // assert greater
+#define SGE         0x2B // assert greater or equal
+#define SL          0x2C // assert less
+#define SLE         0x2D // assert less or equal
+
 // special instructions
 #define MDUMP       0xFD
 #define DUMP_STATE  0xFE
