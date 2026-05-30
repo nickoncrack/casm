@@ -17,10 +17,6 @@ The goal of this project is to create a functional operating system using the `c
 + 1402 instructions in 0.04ms
 + 1402 instructions in ~8ms (debug)
 
-### Projected long term performance
-+ 56.7M instructions/sec
-+ 162015 instructions/sec (debug)
-
 <sub>Current sdl renderer is not fully optimized</sub>
 
 # Documentation
