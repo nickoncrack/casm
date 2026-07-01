@@ -2,22 +2,17 @@
 The goal of this project is to create a functional operating system using the `casm` instruction set which is defined in this project, therefore, this repository does not contain only the emulator and the assembler for the `casm` instruction set, but also other vital components of an operating system such as a BIOS implementation, a kernel, a file system, etc.
 
 ## TODOs
+<sub>(not in order)</sub>
+
 + ~~Add a complete pool allocator implementation (kmalloc, kfree)~~
++ ~~Add a minimal file system which allows parsing a root directory and reading files.~~
++ ~~Switch to a 2 stage bootloader.~~
++ Add usermode, multitasking, systemcalls and improve design of IOPLs.
++ Add a complete implementation of a read only FAT filesystem and refactor current filesystem generator.
++ Add keyboard drivers.
 + Add file including and macros in the assembler.
-+ Add a minimal file system which allows parsing a root directory and reading files.
-+ Switch to a second stage bootloader.
 + Optimize renderer by marking modified regions as dirty
 
-## Benchmarks
-### Current early kernel init
-+ 170116 instructions in ~3ms
-+ 170116 instructions in 998~1162ms (debug)
-
-### Minimal kernel init (interrupts and initial page table only)
-+ 1402 instructions in 0.04ms
-+ 1402 instructions in ~8ms (debug)
-
-<sub>Current sdl renderer is not fully optimized</sub>
 
 # Documentation
 ## 0. Definitions
@@ -455,6 +450,13 @@ The following table contains data structures created by the kernel, before early
 | `0xC0000000` | 512 KiB | Memory pool region |
 
 + The frame bitmap has unknown size as it depends on the memory size. For the default 64 MiB size, the frame bitmap length would be 2 KiB.
+
+#### iii. BIOS region
+| Start VA | Size | Description |
+| --- | --- | --- |
+| `0x00001000` | 64 KiB | BIOS binary |
+| `0x00011000` | 32 KiB | Stage 2 bootloader binary |
+| `0x00019000` | 4 KiB | Metadata |
 
 ### 5c. Memory allocation
 Despite its obvious disadvantages, the kernel uses a pool allocator, as it is the easiest to implement in pure assembly. The allocator consists of multiple pools with block sizes: 8, 32, 64, 128, 256, 1024 and 4096 bytes.
