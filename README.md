@@ -1,18 +1,20 @@
-# Info
-The goal of this project is to create a functional operating system using the `casm` instruction set which is defined in this project, therefore, this repository does not contain only the emulator and the assembler for the `casm` instruction set, but also other vital components of an operating system such as a BIOS implementation, a kernel, a file system, etc.
+## Goals & TODOs
+### [Compiler](https://github.com/nickoncrack/c-subset) goals
++ Rewrite the assembler from scratch in C, in a more organized and scalable form (when I was writing the assembler code I never thought I'd go as far as writing a C subset compiler later)
++ Complete the C subset compiler
++ Eventually self host the compiler
 
-## TODOs
-<sub>(not in order)</sub>
+### Emulator/OS related goals & todos
++ Rewrite this documentation
++ Rewrite the current kernel in C (after compiler is complete), and replace current allocator with a heap allocator.
++ Implement a custom filesystem based on FAT32
++ Add usermode, multitasking, keyboard, mouse, audio drivers, and redesign IOPLs
++ Implement a libc, which is required for the long term goals
 
-+ ~~Add a complete pool allocator implementation (kmalloc, kfree)~~
-+ ~~Add a minimal file system which allows parsing a root directory and reading files.~~
-+ ~~Switch to a 2 stage bootloader.~~
-+ Add usermode, multitasking, systemcalls and improve design of IOPLs.
-+ Add a complete implementation of a read only FAT filesystem and refactor current filesystem generator.
-+ Add keyboard drivers.
-+ Add file including and macros in the assembler.
-+ Optimize renderer by marking modified regions as dirty
-
+### Long term goals
++ Run a port of Doom
++ Implement a minimal desktop environment
++ Port a version of python (?)
 
 # Documentation
 ## 0. Definitions
