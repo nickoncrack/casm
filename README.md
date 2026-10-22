@@ -7,7 +7,8 @@
 ### Architecture todos
 + Redesign to expect variable instruction size instead of the fixed 10 bytes
 + Operations between signed integers
-+ Floating point representations, double precision registers and operations
++ Floating point representations, double precision registers and operations and conversions
++ Merge all conditional jump instructions into 1, with a repurposed prefix
 
 ### Emulator/OS related goals & todos
 + Rewrite this documentation
